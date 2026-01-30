@@ -26,6 +26,13 @@ const veoForm = ref({
   seconds: 8,
 })
 
+// VEO 模型自定义输入状态
+const veoModelCustom = ref(false)
+
+// VEO 参考图
+const veoReferenceFiles = ref<File[]>([])
+const veoFileInput = ref<HTMLInputElement | null>(null)
+
 const statusText: Record<string, string> = {
   queued: '排队中',
   processing: '生成中',
@@ -73,7 +80,7 @@ const createVideo = async () => {
         prompt: veoForm.value.prompt,
         size: veoForm.value.size,
         seconds: veoForm.value.seconds,
-      })
+      }, veoReferenceFiles.value)
 
       task = {
         id: response.data.id,
@@ -91,8 +98,10 @@ const createVideo = async () => {
     // 清空表单
     if (platform.value === 'sora')
       soraForm.value.prompt = ''
-    else
+    else {
       veoForm.value.prompt = ''
+      veoReferenceFiles.value = []
+    }
 
     // 开始轮询
     pollTaskStatus(task.id, task.platform)
@@ -104,6 +113,25 @@ const createVideo = async () => {
   finally {
     isLoading.value = false
   }
+}
+
+// VEO 参考图处理函数
+const handleVeoFileSelect = (event: Event) => {
+  const input = event.target as HTMLInputElement
+  if (input.files) {
+    const newFiles = Array.from(input.files)
+    veoReferenceFiles.value = [...veoReferenceFiles.value, ...newFiles]
+  }
+  // 清空 input 以便重复选择相同文件
+  input.value = ''
+}
+
+const removeVeoFile = (index: number) => {
+  veoReferenceFiles.value.splice(index, 1)
+}
+
+const getFilePreviewUrl = (file: File) => {
+  return URL.createObjectURL(file)
 }
 
 // 轮询任务状态
@@ -287,14 +315,44 @@ onMounted(() => {
         <template v-else>
           <div class="form-group">
             <label class="form-label">模型</label>
-            <select v-model="veoForm.model" class="form-select">
-              <option value="veo_3_1-fast">
-                veo_3_1-fast
-              </option>
-              <option value="veo_3_1">
-                veo_3_1
-              </option>
-            </select>
+            <div class="input-with-toggle">
+              <select
+                v-if="!veoModelCustom"
+                v-model="veoForm.model"
+                class="form-select"
+              >
+                <optgroup label="✨ 高质量版本">
+                  <option value="veo_3_1">veo_3_1</option>
+                  <option value="veo_3_1-4K">veo_3_1-4K</option>
+                </optgroup>
+                <optgroup label="⚡ 快速版本">
+                  <option value="veo_3_1-fast">veo_3_1-fast</option>
+                  <option value="veo_3_1-fast-4K">veo_3_1-fast-4K</option>
+                </optgroup>
+                <optgroup label="🎨 仅参考图版本">
+                  <option value="veo_3_1-components">veo_3_1-components</option>
+                  <option value="veo_3_1-components-4K">veo_3_1-components-4K</option>
+                  <option value="veo_3_1-fast-components">veo_3_1-fast-components</option>
+                  <option value="veo_3_1-fast-components-4K">veo_3_1-fast-components-4K</option>
+                </optgroup>
+              </select>
+              <input
+                v-else
+                v-model="veoForm.model"
+                type="text"
+                class="form-input"
+                placeholder="输入自定义模型名称"
+              >
+              <button
+                type="button"
+                class="toggle-btn"
+                :title="veoModelCustom ? '切换为下拉选择' : '切换为自定义输入'"
+                @click="veoModelCustom = !veoModelCustom"
+              >
+                {{ veoModelCustom ? '📋' : '✏️' }}
+              </button>
+            </div>
+            <small class="form-hint">4K 版本请在模型名后加 -4K；使用 -components 后缀强制参考图模式</small>
           </div>
 
           <div class="form-group">
@@ -325,6 +383,50 @@ onMounted(() => {
                 8 秒
               </option>
             </select>
+          </div>
+
+          <!-- 参考图上传 -->
+          <div class="form-group">
+            <label class="form-label">参考图 (可选)</label>
+            <div class="reference-upload">
+              <input
+                ref="veoFileInput"
+                type="file"
+                accept="image/*"
+                multiple
+                style="display: none"
+                @change="handleVeoFileSelect"
+              >
+              <button
+                type="button"
+                class="btn btn-secondary upload-btn"
+                @click="veoFileInput?.click()"
+              >
+                📷 选择图片
+              </button>
+              <span class="upload-hint">
+                1张=首帧，2张=首尾帧，3张=参考图模式
+              </span>
+            </div>
+            
+            <!-- 已选图片预览 -->
+            <div v-if="veoReferenceFiles.length > 0" class="reference-preview">
+              <div
+                v-for="(file, index) in veoReferenceFiles"
+                :key="index"
+                class="preview-item"
+              >
+                <img :src="getFilePreviewUrl(file)" :alt="file.name">
+                <span class="preview-name">{{ file.name }}</span>
+                <button
+                  type="button"
+                  class="preview-remove"
+                  @click="removeVeoFile(index)"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
           </div>
         </template>
 
@@ -452,5 +554,84 @@ onMounted(() => {
 .toggle-btn:hover {
   background: rgba(99, 102, 241, 0.2);
   border-color: var(--primary);
+}
+
+/* 参考图上传样式 */
+.reference-upload {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.upload-btn {
+  white-space: nowrap;
+}
+
+.upload-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.reference-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.preview-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px;
+  background: var(--bg-input);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.preview-item img {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.preview-name {
+  font-size: 10px;
+  color: var(--text-muted);
+  max-width: 70px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 4px;
+}
+
+.preview-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ef4444;
+  color: white;
+  border: none;
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-remove:hover {
+  background: #dc2626;
+}
+
+.form-hint {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
 }
 </style>

@@ -77,9 +77,7 @@ export class SoraService {
   async queryVideo(taskId: string): Promise<any> {
     this.logger.log(`📤 Sending query request for task: ${taskId}`)
 
-    const response = await this.httpClient.get('/v1/video/query', {
-      params: { id: taskId },
-    })
+    const response = await this.httpClient.get(`/v1/videos/${encodeURIComponent(taskId)}`)
     return response.data
   }
 }

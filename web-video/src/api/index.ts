@@ -53,9 +53,27 @@ export interface CreateVeoVideoParams {
 }
 
 export const veoApi = {
-  // 创建视频
-  createVideo: (params: CreateVeoVideoParams) =>
-    api.post('/v1/veo/create', params),
+  // 创建视频（支持参考图上传）
+  createVideo: (params: CreateVeoVideoParams, files?: File[]) => {
+    const formData = new FormData()
+    formData.append('model', params.model)
+    formData.append('prompt', params.prompt)
+    if (params.size) formData.append('size', params.size)
+    if (params.seconds) formData.append('seconds', String(params.seconds))
+    
+    // 添加参考图
+    if (files && files.length > 0) {
+      for (const file of files) {
+        formData.append('input_reference', file)
+      }
+    }
+    
+    return api.post('/v1/veo/create', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+  },
 
   // 查询视频状态
   queryVideo: (id: string) =>

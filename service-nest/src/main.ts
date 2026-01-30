@@ -25,9 +25,15 @@ async function bootstrap() {
   const port = process.env.PORT || 3003
   await app.listen(port)
 
-  console.log(`🚀 Sora NestJS Service is running on: http://localhost:${port}`)
-  console.log(`📹 Video Create API: POST http://localhost:${port}/v1/video/create`)
-  console.log(`🔍 Video Query API:  GET  http://localhost:${port}/v1/video/query?id=xxx`)
+  console.log(`🚀 Video Generation Service is running on: http://localhost:${port}`)
+  console.log('')
+  console.log('📹 Sora API:')
+  console.log(`   POST http://localhost:${port}/v1/video/create`)
+  console.log(`   GET  http://localhost:${port}/v1/video/query?id=xxx`)
+  console.log('')
+  console.log('🎥 VEO API:')
+  console.log(`   POST http://localhost:${port}/v1/veo/create (支持 multipart/form-data 参考图上传)`)
+  console.log(`   GET  http://localhost:${port}/v1/veo/query?id=xxx`)
 }
 
 bootstrap()

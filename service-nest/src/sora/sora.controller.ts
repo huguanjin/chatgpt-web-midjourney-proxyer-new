@@ -8,7 +8,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common'
-import type { SoraService } from './sora.service'
+import { SoraService } from './sora.service'
 import type { CreateVideoDto } from './dto/create-video.dto'
 import type { QueryVideoDto } from './dto/query-video.dto'
 
