@@ -9,6 +9,11 @@ const router = createRouter({
       component: () => import('@/views/HomeView.vue')
     },
     {
+      path: '/image',
+      name: 'image',
+      component: () => import('@/views/ImageView.vue')
+    },
+    {
       path: '/tasks',
       name: 'tasks',
       component: () => import('@/views/TasksView.vue')
@@ -22,6 +27,11 @@ const router = createRouter({
       path: '/query',
       name: 'query',
       component: () => import('@/views/QueryView.vue')
+    },
+    {
+      path: '/config',
+      name: 'config',
+      component: () => import('@/views/ConfigView.vue')
     }
   ]
 })

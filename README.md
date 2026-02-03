@@ -1,10 +1,10 @@
-# Sora & VEO 视频生成器
+# Sora & VEO 视频生成器 + Gemini 图片创作
 
-AI 视频生成平台 - 支持 OpenAI Sora 和 Google VEO 视频生成
+AI 创作平台 - 支持 OpenAI Sora 和 Google VEO 视频生成，以及 Gemini 图片创作
 
 ## 项目介绍
 
-本项目是一个基于 **OpenAI Sora** 和 **Google VEO** 的 AI 视频生成平台，采用前后端分离架构：
+本项目是一个基于 **OpenAI Sora**、**Google VEO** 和 **Gemini** 的 AI 创作平台，采用前后端分离架构：
 
 - **后端服务** (`service-nest/`): 基于 NestJS 构建的 API 服务
 - **前端应用** (`web-video/`): 基于 Vue 3 + Vite 构建的 Web 界面
@@ -13,20 +13,28 @@ AI 视频生成平台 - 支持 OpenAI Sora 和 Google VEO 视频生成
 
 - [x] **Sora 视频生成** - 支持文生视频、图生视频
 - [x] **VEO 视频生成** - 支持 Google VEO 3.1 模型
-- [x] **多模型支持** - 支持 sora-2、veo_3_1-fast 等多种模型
-- [x] **任务管理** - 视频生成任务队列管理和状态追踪
+- [x] **Gemini 图片创作** - 支持 gemini-3-pro-image-preview 模型
+- [x] **多模型支持** - 支持 sora-2、veo_3_1-fast、gemini-3-pro-image-preview 等多种模型
+- [x] **任务管理** - 视频/图片生成任务队列管理和状态追踪
 - [x] **角色管理** - Sora 角色创建与管理
-- [x] **自定义参数** - 支持自定义视频时长、分辨率、方向等参数
-- [x] **实时进度** - 视频生成进度实时查询
+- [x] **自定义参数** - 支持自定义视频时长、分辨率、方向、图片宽高比、清晰度等参数
+- [x] **实时进度** - 视频/图片生成进度实时查询
+- [x] **在线配置** - 支持前端可视化配置管理，修改后实时生效无需重启
+- [x] **多格式下载** - 图片支持 JPG/PNG 多格式下载
 
 ## 项目结构
 
 ```
 ├── service-nest/          # 后端服务 (NestJS)
 │   ├── src/
+│   │   ├── config/        # 配置管理模块
 │   │   ├── sora/          # Sora 视频生成模块
+│   │   ├── veo/           # VEO 视频生成模块
+│   │   ├── gemini-image/  # Gemini 图片生成模块
 │   │   ├── app.module.ts
 │   │   └── main.ts
+│   ├── config.json        # 配置文件 (需自行创建)
+│   ├── config.example.json# 配置示例文件
 │   └── package.json
 │
 ├── web-video/             # 前端应用 (Vue 3)
@@ -40,19 +48,23 @@ AI 视频生成平台 - 支持 OpenAI Sora 和 Google VEO 视频生成
 └── README.md
 ```
 
-## 环境变量
+## 配置说明
 
-### 后端服务 (service-nest/.env)
+### 配置文件 (service-nest/config.json)
 
-| 环境变量 | 说明 | 默认值 |
-| --- | --- | --- |
-| PORT | 服务端口 | 3003 |
-| SORA_SERVER | Sora API 服务地址 | - |
-| SORA_KEY | Sora API 密钥 | - |
-| SORA_CHARACTER_SERVER | Sora 角色 API 地址 (可选) | 同 SORA_SERVER |
-| SORA_CHARACTER_KEY | Sora 角色 API 密钥 (可选) | 同 SORA_KEY |
-| VEO_SERVER | VEO API 服务地址 | - |
-| VEO_KEY | VEO API 密钥 | - |
+项目使用 JSON 文件存储配置，支持前端在线修改，**修改后实时生效无需重启服务**。
+
+| 配置项 | 说明 |
+| --- | --- |
+| `port` | 服务端口，默认 3003 |
+| `sora.server` | Sora API 服务地址 |
+| `sora.key` | Sora API 密钥 |
+| `sora.characterServer` | Sora 角色 API 地址 (可选) |
+| `sora.characterKey` | Sora 角色 API 密钥 (可选) |
+| `veo.server` | VEO API 服务地址 |
+| `veo.key` | VEO API 密钥 |
+| `geminiImage.server` | Gemini 图片 API 地址 |
+| `geminiImage.key` | Gemini 图片 API 密钥 |
 
 ## 快速开始
 
@@ -68,17 +80,16 @@ cd web-video
 npm install
 ```
 
-### 2. 配置环境变量
+### 2. 配置
 
-复制 `service-nest/.env.example` 为 `service-nest/.env`，并填写相关配置：
+复制示例配置文件并填写 API 密钥：
 
-```env
-PORT=3003
-SORA_SERVER=your_sora_api_server
-SORA_KEY=your_sora_api_key
-VEO_SERVER=your_veo_api_server
-VEO_KEY=your_veo_api_key
+```bash
+cd service-nest
+cp config.example.json config.json
 ```
+
+编辑 `config.json` 填入真实的 API 配置，或者启动服务后通过前端配置页面在线编辑。
 
 ### 3. 启动服务
 
@@ -96,6 +107,7 @@ npm run dev
 
 - 前端: http://localhost:5173
 - 后端 API: http://localhost:3003
+- **配置管理**: http://localhost:5173/config
 
 ## API 接口
 
@@ -117,6 +129,42 @@ POST /v1/video/create
 **查询任务状态**
 ```
 GET /v1/video/query?id=task_id
+```
+
+### 图片生成
+
+**同步生成图片**
+```
+POST /v1/image/generate
+
+{
+  "model": "gemini-3-pro-image-preview",
+  "prompt": "图片描述",
+  "aspectRatio": "1:1",
+  "imageSize": "1K"
+}
+```
+
+**查询图片任务**
+```
+GET /v1/image/query?id=task_id
+```
+
+### 配置管理
+
+**获取配置 (脱敏)**
+```
+GET /v1/config
+```
+
+**更新服务配置**
+```
+PUT /v1/config/:service
+
+{
+  "server": "https://api-server.com",
+  "key": "your-api-key"
+}
 ```
 
 ## 技术栈

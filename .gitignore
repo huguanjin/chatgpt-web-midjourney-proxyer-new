@@ -31,3 +31,7 @@ coverage
 # Environment variables files
 /service/.env
 /service/uploads
+
+# Config files with sensitive data
+/service-nest/.env
+/service-nest/config.json

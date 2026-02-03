@@ -11,6 +11,13 @@ const api = axios.create({
   },
 })
 
+// 调试：打印请求
+api.interceptors.request.use((config) => {
+  console.log('📤 API Request:', config.method?.toUpperCase(), config.url)
+  console.log('📦 Request Data:', config.data)
+  return config
+})
+
 // ============ Sora API ============
 
 export interface CreateSoraVideoParams {
@@ -78,6 +85,123 @@ export const veoApi = {
   // 查询视频状态
   queryVideo: (id: string) =>
     api.get(`/v1/veo/query?id=${encodeURIComponent(id)}`),
+}
+
+// ============ Gemini Image API ============
+
+export interface CreateGeminiImageParams {
+  model?: string
+  prompt: string
+  aspectRatio?: '1:1' | '16:9' | '9:16' | '4:3' | '3:4'
+  imageSize?: '1K' | '2K' | '4K'
+}
+
+export interface GeminiImageResult {
+  id: string
+  status: 'processing' | 'completed' | 'failed' | 'not_found'
+  prompt?: string
+  model?: string
+  aspectRatio?: string
+  imageSize?: string
+  images?: Array<{
+    mimeType: string
+    data: string
+  }>
+  error?: string
+  createdAt?: number
+}
+
+export const geminiImageApi = {
+  // 创建图片（异步）
+  createImage: (params: CreateGeminiImageParams, files?: File[]) => {
+    // 有参考图时使用 FormData
+    if (files && files.length > 0) {
+      const formData = new FormData()
+      formData.append('prompt', params.prompt)
+      if (params.model) formData.append('model', params.model)
+      if (params.aspectRatio) formData.append('aspectRatio', params.aspectRatio)
+      if (params.imageSize) formData.append('imageSize', params.imageSize)
+      
+      for (const file of files) {
+        formData.append('reference_images', file)
+      }
+      
+      return api.post('/v1/image/create-with-ref', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      })
+    }
+    
+    // 无参考图时直接发 JSON
+    return api.post('/v1/image/create', params)
+  },
+
+  // 同步生成图片（等待结果）
+  generateImage: (params: CreateGeminiImageParams, files?: File[]) => {
+    // 有参考图时使用 FormData
+    if (files && files.length > 0) {
+      const formData = new FormData()
+      formData.append('prompt', params.prompt)
+      if (params.model) formData.append('model', params.model)
+      if (params.aspectRatio) formData.append('aspectRatio', params.aspectRatio)
+      if (params.imageSize) formData.append('imageSize', params.imageSize)
+      
+      for (const file of files) {
+        formData.append('reference_images', file)
+      }
+      
+      return api.post('/v1/image/generate-with-ref', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        timeout: 180000,
+      })
+    }
+    
+    // 无参考图时直接发 JSON
+    return api.post('/v1/image/generate', params, {
+      timeout: 180000,
+    })
+  },
+
+  // 查询图片状态
+  queryImage: (id: string) =>
+    api.get<GeminiImageResult>(`/v1/image/query?id=${encodeURIComponent(id)}`),
+}
+
+// ============ Config API ============
+
+export interface ServiceConfig {
+  server: string
+  key: string
+  characterServer?: string
+  characterKey?: string
+}
+
+export interface AppConfig {
+  port: number
+  sora: ServiceConfig
+  veo: ServiceConfig
+  geminiImage: ServiceConfig
+}
+
+export const configApi = {
+  // 获取配置（隐藏敏感信息）
+  getConfig: () =>
+    api.get<{ status: string; data: AppConfig }>('/v1/config'),
+
+  // 获取完整配置（包含 API Key）
+  getFullConfig: () =>
+    api.get<{ status: string; data: AppConfig }>('/v1/config/full'),
+
+  // 更新全部配置
+  updateConfig: (config: Partial<AppConfig>) =>
+    api.put<{ status: string; message: string; data: AppConfig }>('/v1/config', config),
+
+  // 更新单个服务配置
+  updateServiceConfig: (service: 'sora' | 'veo' | 'geminiImage', config: Partial<ServiceConfig>) =>
+    api.put<{ status: string; message: string; data: AppConfig }>(`/v1/config/${service}`, config),
 }
 
 export default api

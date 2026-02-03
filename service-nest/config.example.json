@@ -1,0 +1,17 @@
+{
+  "port": 3003,
+  "sora": {
+    "server": "https://your-sora-api-server.com",
+    "key": "your-sora-api-key",
+    "characterServer": "https://your-character-api-server.com",
+    "characterKey": "your-character-api-key"
+  },
+  "veo": {
+    "server": "https://your-veo-api-server.com",
+    "key": "your-veo-api-key"
+  },
+  "geminiImage": {
+    "server": "https://your-gemini-api-server.com",
+    "key": "your-gemini-api-key"
+  }
+}

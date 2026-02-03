@@ -2,25 +2,24 @@ import { Injectable, Logger } from '@nestjs/common'
 import axios from 'axios'
 import * as FormData from 'form-data'
 import { CreateVeoVideoDto } from './dto/create-veo-video.dto'
+import { ConfigService } from '../config/config.service'
 
 @Injectable()
 export class VeoService {
   private readonly logger = new Logger(VeoService.name)
-  private readonly veoServer: string
-  private readonly veoKey: string
 
-  constructor() {
-    this.veoServer = process.env.VEO_SERVER || 'https://magic666.top'
-    this.veoKey = process.env.VEO_KEY || ''
-
-    this.logger.log(`🔧 VEO Server: ${this.veoServer}`)
-    this.logger.log(`🔑 VEO Key: ${this.veoKey ? `****${this.veoKey.slice(-8)}` : 'NOT SET'}`)
+  constructor(private readonly configService: ConfigService) {
+    const config = this.configService.getVeoConfig()
+    this.logger.log(`🔧 VEO Server: ${config.server}`)
+    this.logger.log(`🔑 VEO Key: ${config.key ? `****${config.key.slice(-8)}` : 'NOT SET'}`)
   }
 
   /**
    * 创建 VEO 视频任务（支持参考图）
    */
   async createVideo(dto: CreateVeoVideoDto, files?: Express.Multer.File[]): Promise<any> {
+    const config = this.configService.getVeoConfig()
+    
     this.logger.log(`📤 Creating VEO video with model: ${dto.model}`)
     this.logger.log(`📝 Prompt: ${dto.prompt}`)
 
@@ -50,12 +49,12 @@ export class VeoService {
     }
 
     const response = await axios.post(
-      `${this.veoServer}/v1/videos`,
+      `${config.server}/v1/videos`,
       formData,
       {
         headers: {
           ...formData.getHeaders(),
-          'Authorization': `Bearer ${this.veoKey}`,
+          'Authorization': `Bearer ${config.key}`,
         },
         timeout: 120000,
       }
@@ -68,13 +67,15 @@ export class VeoService {
    * 查询 VEO 视频任务状态
    */
   async queryVideo(taskId: string): Promise<any> {
+    const config = this.configService.getVeoConfig()
+    
     this.logger.log(`📤 Querying VEO task: ${taskId}`)
 
     const response = await axios.get(
-      `${this.veoServer}/v1/videos/${encodeURIComponent(taskId)}`,
+      `${config.server}/v1/videos/${encodeURIComponent(taskId)}`,
       {
         headers: {
-          'Authorization': `Bearer ${this.veoKey}`,
+          'Authorization': `Bearer ${config.key}`,
         },
         timeout: 30000,
       }
