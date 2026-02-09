@@ -15,10 +15,12 @@ const editMode = ref<{
   sora: boolean
   veo: boolean
   geminiImage: boolean
+  grok: boolean
 }>({
   sora: false,
   veo: false,
   geminiImage: false,
+  grok: false,
 })
 
 // 编辑表单数据
@@ -26,10 +28,12 @@ const editForm = ref<{
   sora: ServiceConfig
   veo: ServiceConfig
   geminiImage: ServiceConfig
+  grok: ServiceConfig
 }>({
   sora: { server: '', key: '', characterServer: '', characterKey: '' },
   veo: { server: '', key: '' },
   geminiImage: { server: '', key: '' },
+  grok: { server: '', key: '' },
 })
 
 // 显示消息
@@ -55,7 +59,7 @@ const loadConfig = async () => {
 }
 
 // 进入编辑模式
-const enterEditMode = async (service: 'sora' | 'veo' | 'geminiImage') => {
+const enterEditMode = async (service: 'sora' | 'veo' | 'geminiImage' | 'grok') => {
   // 获取完整配置（包含 API Key）
   try {
     const response = await configApi.getFullConfig()
@@ -67,6 +71,8 @@ const enterEditMode = async (service: 'sora' | 'veo' | 'geminiImage') => {
       editForm.value.veo = { ...fullConfig.veo }
     } else if (service === 'geminiImage') {
       editForm.value.geminiImage = { ...fullConfig.geminiImage }
+    } else if (service === 'grok') {
+      editForm.value.grok = { ...fullConfig.grok }
     }
     
     editMode.value[service] = true
@@ -76,12 +82,12 @@ const enterEditMode = async (service: 'sora' | 'veo' | 'geminiImage') => {
 }
 
 // 取消编辑
-const cancelEdit = (service: 'sora' | 'veo' | 'geminiImage') => {
+const cancelEdit = (service: 'sora' | 'veo' | 'geminiImage' | 'grok') => {
   editMode.value[service] = false
 }
 
 // 保存配置
-const saveConfig = async (service: 'sora' | 'veo' | 'geminiImage') => {
+const saveConfig = async (service: 'sora' | 'veo' | 'geminiImage' | 'grok') => {
   isSaving.value = true
   try {
     const serviceConfig = editForm.value[service]
@@ -105,12 +111,13 @@ const getServiceName = (service: string): string => {
     sora: 'Sora',
     veo: 'VEO',
     geminiImage: 'Gemini Image',
+    grok: 'Grok',
   }
   return names[service] || service
 }
 
 // 测试连接
-const testConnection = async (service: 'sora' | 'veo' | 'geminiImage') => {
+const testConnection = async (service: 'sora' | 'veo' | 'geminiImage' | 'grok') => {
   showMessage(`正在测试 ${getServiceName(service)} 连接...`, 'success')
   // TODO: 实现连接测试
   setTimeout(() => {
@@ -276,6 +283,48 @@ onMounted(() => {
               {{ isSaving ? '保存中...' : '💾 保存' }}
             </button>
             <button class="cancel-btn" @click="cancelEdit('geminiImage')">取消</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 说明 -->
+      <div class="config-section">
+        <div class="section-header">
+          <h2>⚡ Grok 视频生成</h2>
+          <button 
+            v-if="!editMode.grok" 
+            class="edit-btn"
+            @click="enterEditMode('grok')"
+          >
+            ✏️ 编辑
+          </button>
+        </div>
+        
+        <div v-if="!editMode.grok" class="config-display">
+          <div class="config-item">
+            <label>API 地址</label>
+            <span class="value">{{ config.grok?.server || '(未设置)' }}</span>
+          </div>
+          <div class="config-item">
+            <label>API Key</label>
+            <span class="value masked">{{ config.grok?.key || '(未设置)' }}</span>
+          </div>
+        </div>
+
+        <div v-else class="config-edit">
+          <div class="form-group">
+            <label>API 地址</label>
+            <input v-model="editForm.grok.server" type="text" placeholder="https://..." />
+          </div>
+          <div class="form-group">
+            <label>API Key</label>
+            <input v-model="editForm.grok.key" type="text" placeholder="sk-..." />
+          </div>
+          <div class="button-group">
+            <button class="save-btn" :disabled="isSaving" @click="saveConfig('grok')">
+              {{ isSaving ? '保存中...' : '💾 保存' }}
+            </button>
+            <button class="cancel-btn" @click="cancelEdit('grok')">取消</button>
           </div>
         </div>
       </div>

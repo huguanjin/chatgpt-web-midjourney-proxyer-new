@@ -39,6 +39,16 @@ export class GeminiImageConfigDto {
   key?: string
 }
 
+export class GrokConfigDto {
+  @IsOptional()
+  @IsString()
+  server?: string
+
+  @IsOptional()
+  @IsString()
+  key?: string
+}
+
 export class UpdateConfigDto {
   @IsOptional()
   @IsNumber()
@@ -58,6 +68,11 @@ export class UpdateConfigDto {
   @ValidateNested()
   @Type(() => GeminiImageConfigDto)
   geminiImage?: GeminiImageConfigDto
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => GrokConfigDto)
+  grok?: GrokConfigDto
 }
 
 export class UpdateServiceConfigDto {

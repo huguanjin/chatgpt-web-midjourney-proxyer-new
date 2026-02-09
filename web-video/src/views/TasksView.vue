@@ -73,6 +73,9 @@ const clearCompleted = () => {
             <div class="video-card-title" :title="task.prompt">
               {{ task.prompt }}
             </div>
+            <div class="video-card-id" :title="task.id">
+              ID: {{ task.id }}
+            </div>
             <div class="video-card-meta">
               <span class="status-badge" :class="`status-${task.status}`">
                 {{ statusText[task.status] }}
@@ -139,6 +142,18 @@ const clearCompleted = () => {
 .video-placeholder {
   color: var(--text-muted);
   font-size: 14px;
+}
+
+.video-card-id {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: monospace;
+  cursor: pointer;
+  user-select: all;
 }
 
 .video-card-actions {

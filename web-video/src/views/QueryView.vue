@@ -7,7 +7,7 @@ const BACKEND_API = 'http://localhost:3003'
 
 // 任务 ID 和类型
 const taskId = ref('')
-const taskType = ref<'sora' | 'veo'>('sora')
+const taskType = ref<'sora' | 'veo' | 'grok'>('sora')
 const isLoading = ref(false)
 const errorMsg = ref('')
 
@@ -61,7 +61,12 @@ const queryTask = async () => {
 
   try {
     // 根据任务类型选择不同的 API 端点
-    const endpoint = taskType.value === 'veo' ? '/v1/veo/query' : '/v1/video/query'
+    const endpointMap: Record<string, string> = {
+      sora: '/v1/video/query',
+      veo: '/v1/veo/query',
+      grok: '/v1/grok/query',
+    }
+    const endpoint = endpointMap[taskType.value] || '/v1/video/query'
     
     const response = await axios.get(
       `${BACKEND_API}${endpoint}`,
@@ -177,6 +182,10 @@ onUnmounted(() => {
             <label class="type-option">
               <input type="radio" v-model="taskType" value="veo" />
               <span>VEO</span>
+            </label>
+            <label class="type-option">
+              <input type="radio" v-model="taskType" value="grok" />
+              <span>Grok</span>
             </label>
           </div>
         </div>

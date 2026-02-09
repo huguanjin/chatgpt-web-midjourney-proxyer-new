@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { soraApi, veoApi } from '@/api'
+import { soraApi, veoApi, grokApi } from '@/api'
 import { type VideoTask, useVideoStore } from '@/stores/video'
 
 const store = useVideoStore()
 
-const platform = ref<'sora' | 'veo'>('sora')
+const platform = ref<'sora' | 'veo' | 'grok'>('sora')
 const isLoading = ref(false)
 
 const soraForm = ref({
@@ -33,6 +33,22 @@ const veoModelCustom = ref(false)
 const veoReferenceFiles = ref<File[]>([])
 const veoFileInput = ref<HTMLInputElement | null>(null)
 
+// Grok 表单
+const grokForm = ref({
+  model: 'grok-video-3',
+  prompt: '',
+  aspect_ratio: '3:2' as '2:3' | '3:2' | '1:1',
+  seconds: 6,
+  size: '720P' as '720P' | '1080P',
+})
+
+// Grok 模型自定义输入状态
+const grokModelCustom = ref(false)
+
+// Grok 参考图
+const grokReferenceFiles = ref<File[]>([])
+const grokFileInput = ref<HTMLInputElement | null>(null)
+
 const statusText: Record<string, string> = {
   queued: '排队中',
   processing: '生成中',
@@ -44,7 +60,11 @@ const recentTasks = computed(() => store.tasks.slice(0, 5))
 
 // 创建视频
 const createVideo = async () => {
-  const prompt = platform.value === 'sora' ? soraForm.value.prompt : veoForm.value.prompt
+  const prompt = platform.value === 'sora'
+    ? soraForm.value.prompt
+    : platform.value === 'veo'
+      ? veoForm.value.prompt
+      : grokForm.value.prompt
   if (!prompt.trim()) {
     alert('请输入提示词')
     return
@@ -74,7 +94,7 @@ const createVideo = async () => {
         platform: 'sora',
       }
     }
-    else {
+    else if (platform.value === 'veo') {
       response = await veoApi.createVideo({
         model: veoForm.value.model,
         prompt: veoForm.value.prompt,
@@ -92,15 +112,39 @@ const createVideo = async () => {
         platform: 'veo',
       }
     }
+    else {
+      // Grok
+      response = await grokApi.createVideo({
+        model: grokForm.value.model,
+        prompt: grokForm.value.prompt,
+        aspect_ratio: grokForm.value.aspect_ratio,
+        seconds: grokForm.value.seconds,
+        size: grokForm.value.size,
+      }, grokReferenceFiles.value)
+
+      task = {
+        id: response.data.id,
+        model: grokForm.value.model,
+        prompt: grokForm.value.prompt,
+        status: 'queued',
+        progress: 0,
+        created_at: Date.now(),
+        platform: 'grok',
+      }
+    }
 
     store.addTask(task)
 
     // 清空表单
     if (platform.value === 'sora')
       soraForm.value.prompt = ''
-    else {
+    else if (platform.value === 'veo') {
       veoForm.value.prompt = ''
       veoReferenceFiles.value = []
+    }
+    else {
+      grokForm.value.prompt = ''
+      grokReferenceFiles.value = []
     }
 
     // 开始轮询
@@ -134,8 +178,22 @@ const getFilePreviewUrl = (file: File) => {
   return URL.createObjectURL(file)
 }
 
+// Grok 参考图处理函数
+const handleGrokFileSelect = (event: Event) => {
+  const input = event.target as HTMLInputElement
+  if (input.files) {
+    const newFiles = Array.from(input.files)
+    grokReferenceFiles.value = [...grokReferenceFiles.value, ...newFiles]
+  }
+  input.value = ''
+}
+
+const removeGrokFile = (index: number) => {
+  grokReferenceFiles.value.splice(index, 1)
+}
+
 // 轮询任务状态
-const pollTaskStatus = async (taskId: string, taskPlatform: 'sora' | 'veo') => {
+const pollTaskStatus = async (taskId: string, taskPlatform: 'sora' | 'veo' | 'grok') => {
   const maxAttempts = 120
   let attempts = 0
 
@@ -147,7 +205,9 @@ const pollTaskStatus = async (taskId: string, taskPlatform: 'sora' | 'veo') => {
     try {
       const response = taskPlatform === 'sora'
         ? await soraApi.queryVideo(taskId)
-        : await veoApi.queryVideo(taskId)
+        : taskPlatform === 'veo'
+          ? await veoApi.queryVideo(taskId)
+          : await grokApi.queryVideo(taskId)
 
       const data = response.data
 
@@ -207,13 +267,20 @@ onMounted(() => {
       >
         🎥 VEO (Google)
       </button>
+      <button
+        class="tab"
+        :class="{ active: platform === 'grok' }"
+        @click="platform = 'grok'"
+      >
+        ⚡ Grok (xAI)
+      </button>
     </div>
 
     <div class="grid grid-2">
       <!-- 左侧：输入表单 -->
       <div class="card">
         <h2 class="card-title">
-          {{ platform === 'sora' ? '🎬 Sora 视频生成' : '🎥 VEO 视频生成' }}
+          {{ platform === 'sora' ? '🎨 Sora 视频生成' : platform === 'veo' ? '🎥 VEO 视频生成' : '⚡ Grok 视频生成' }}
         </h2>
 
         <!-- Sora 表单 -->
@@ -312,7 +379,7 @@ onMounted(() => {
         </template>
 
         <!-- VEO 表单 -->
-        <template v-else>
+        <template v-else-if="platform === 'veo'">
           <div class="form-group">
             <label class="form-label">模型</label>
             <div class="input-with-toggle">
@@ -430,6 +497,116 @@ onMounted(() => {
           </div>
         </template>
 
+        <!-- Grok 表单 -->
+        <template v-else>
+          <div class="form-group">
+            <label class="form-label">模型</label>
+            <div class="input-with-toggle">
+              <select
+                v-if="!grokModelCustom"
+                v-model="grokForm.model"
+                class="form-select"
+              >
+                <option value="grok-video-3">
+                  grok-video-3 (6秒)
+                </option>
+                <option value="grok-video-pro">
+                  grok-video-pro (10秒)
+                </option>
+              </select>
+              <input
+                v-else
+                v-model="grokForm.model"
+                type="text"
+                class="form-input"
+                placeholder="输入自定义模型名称"
+              >
+              <button
+                type="button"
+                class="toggle-btn"
+                :title="grokModelCustom ? '切换为下拉选择' : '切换为自定义输入'"
+                @click="grokModelCustom = !grokModelCustom"
+              >
+                {{ grokModelCustom ? '📋' : '✏️' }}
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">提示词</label>
+            <textarea
+              v-model="grokForm.prompt"
+              class="form-textarea"
+              placeholder="描述你想要生成的视频内容..."
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">尺寸比例</label>
+            <select v-model="grokForm.aspect_ratio" class="form-select">
+              <option value="3:2">横屏 (3:2)</option>
+              <option value="2:3">竖屏 (2:3)</option>
+              <option value="1:1">正方 (1:1)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">分辨率</label>
+            <select v-model="grokForm.size" class="form-select">
+              <option value="720P">720P</option>
+              <option value="1080P">1080P</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">时长</label>
+            <select v-model.number="grokForm.seconds" class="form-select">
+              <option :value="6">6 秒 (grok-video-3)</option>
+              <option :value="10">10 秒 (grok-video-pro)</option>
+            </select>
+          </div>
+
+          <!-- 参考图上传 -->
+          <div class="form-group">
+            <label class="form-label">参考图 (可选)</label>
+            <div class="reference-upload">
+              <input
+                ref="grokFileInput"
+                type="file"
+                accept="image/*"
+                style="display: none"
+                @change="handleGrokFileSelect"
+              >
+              <button
+                type="button"
+                class="btn btn-secondary upload-btn"
+                @click="grokFileInput?.click()"
+              >
+                📷 选择图片
+              </button>
+            </div>
+            
+            <!-- 已选图片预览 -->
+            <div v-if="grokReferenceFiles.length > 0" class="reference-preview">
+              <div
+                v-for="(file, index) in grokReferenceFiles"
+                :key="index"
+                class="preview-item"
+              >
+                <img :src="getFilePreviewUrl(file)" :alt="file.name">
+                <span class="preview-name">{{ file.name }}</span>
+                <button
+                  type="button"
+                  class="preview-remove"
+                  @click="removeGrokFile(index)"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          </div>
+        </template>
+
         <button
           class="btn btn-primary"
           style="width: 100%"
@@ -460,6 +637,9 @@ onMounted(() => {
             <div class="task-info">
               <div class="task-title">
                 {{ task.prompt.slice(0, 50) }}{{ task.prompt.length > 50 ? '...' : '' }}
+              </div>
+              <div class="task-id" :title="task.id">
+                ID: {{ task.id }}
               </div>
               <div class="task-meta">
                 <span class="status-badge" :class="`status-${task.status}`">
@@ -511,10 +691,22 @@ onMounted(() => {
 
 .task-title {
   font-size: 14px;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.task-id {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: monospace;
+  cursor: pointer;
+  user-select: all;
 }
 
 .task-meta {

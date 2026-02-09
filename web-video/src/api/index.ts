@@ -87,6 +87,45 @@ export const veoApi = {
     api.get(`/v1/veo/query?id=${encodeURIComponent(id)}`),
 }
 
+// ============ Grok API ============
+
+export interface CreateGrokVideoParams {
+  model: string
+  prompt: string
+  aspect_ratio?: '2:3' | '3:2' | '1:1'
+  seconds?: number
+  size?: '720P' | '1080P'
+}
+
+export const grokApi = {
+  // 创建视频（支持参考图上传）
+  createVideo: (params: CreateGrokVideoParams, files?: File[]) => {
+    const formData = new FormData()
+    formData.append('model', params.model)
+    formData.append('prompt', params.prompt)
+    if (params.aspect_ratio) formData.append('aspect_ratio', params.aspect_ratio)
+    if (params.seconds) formData.append('seconds', String(params.seconds))
+    if (params.size) formData.append('size', params.size)
+
+    // 添加参考图
+    if (files && files.length > 0) {
+      for (const file of files) {
+        formData.append('input_reference', file)
+      }
+    }
+
+    return api.post('/v1/grok/create', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+  },
+
+  // 查询视频状态
+  queryVideo: (id: string) =>
+    api.get(`/v1/grok/query?id=${encodeURIComponent(id)}`),
+}
+
 // ============ Gemini Image API ============
 
 export interface CreateGeminiImageParams {
@@ -184,6 +223,7 @@ export interface AppConfig {
   sora: ServiceConfig
   veo: ServiceConfig
   geminiImage: ServiceConfig
+  grok: ServiceConfig
 }
 
 export const configApi = {
@@ -200,7 +240,7 @@ export const configApi = {
     api.put<{ status: string; message: string; data: AppConfig }>('/v1/config', config),
 
   // 更新单个服务配置
-  updateServiceConfig: (service: 'sora' | 'veo' | 'geminiImage', config: Partial<ServiceConfig>) =>
+  updateServiceConfig: (service: 'sora' | 'veo' | 'geminiImage' | 'grok', config: Partial<ServiceConfig>) =>
     api.put<{ status: string; message: string; data: AppConfig }>(`/v1/config/${service}`, config),
 }
 

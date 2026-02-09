@@ -57,10 +57,22 @@ export class SoraService {
    * 查询视频任务状态
    */
   async queryVideo(taskId: string): Promise<any> {
+    const config = this.configService.getSoraConfig()
+    const url = `/v1/videos/${encodeURIComponent(taskId)}`
+    
     this.logger.log(`📤 Sending query request for task: ${taskId}`)
+    this.logger.log(`🔗 Full URL: ${config.server}${url}`)
 
-    const httpClient = this.createHttpClient()
-    const response = await httpClient.get(`/v1/videos/${encodeURIComponent(taskId)}`)
-    return response.data
+    try {
+      const httpClient = this.createHttpClient()
+      const response = await httpClient.get(url)
+      return response.data
+    } catch (error) {
+      // 输出更详细的错误信息
+      this.logger.error(`❌ Query failed for task: ${taskId}`)
+      this.logger.error(`📋 Status: ${error.response?.status}`)
+      this.logger.error(`📋 Response data: ${JSON.stringify(error.response?.data, null, 2)}`)
+      throw error
+    }
   }
 }

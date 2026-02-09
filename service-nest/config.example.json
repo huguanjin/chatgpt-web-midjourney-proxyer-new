@@ -13,5 +13,9 @@
   "geminiImage": {
     "server": "https://your-gemini-api-server.com",
     "key": "your-gemini-api-key"
+  },
+  "grok": {
+    "server": "https://your-grok-api-server.com",
+    "key": "your-grok-api-key"
   }
 }

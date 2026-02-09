@@ -3,6 +3,7 @@ import { ConfigModule as NestConfigModule } from '@nestjs/config'
 import { SoraModule } from './sora/sora.module'
 import { VeoModule } from './veo/veo.module'
 import { GeminiImageModule } from './gemini-image/gemini-image.module'
+import { GrokVideoModule } from './grok-video/grok-video.module'
 import { ConfigModule } from './config/config.module'
 
 @Module({
@@ -20,6 +21,8 @@ import { ConfigModule } from './config/config.module'
     VeoModule,
     // Gemini 图片生成模块
     GeminiImageModule,
+    // Grok 视频生成模块
+    GrokVideoModule,
   ],
 })
 export class AppModule {}

@@ -10,7 +10,7 @@ export interface VideoTask {
   video_url?: string
   thumbnail_url?: string
   created_at: number
-  platform: 'sora' | 'veo'
+  platform: 'sora' | 'veo' | 'grok'
 }
 
 export interface Character {
