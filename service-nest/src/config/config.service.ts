@@ -18,6 +18,10 @@ export interface AppConfig {
     server: string
     key: string
   }
+  grok: {
+    server: string
+    key: string
+  }
 }
 
 @Injectable()
@@ -71,6 +75,10 @@ export class ConfigService {
         server: process.env.GEMINI_IMAGE_SERVER || '',
         key: process.env.GEMINI_IMAGE_KEY || '',
       },
+      grok: {
+        server: process.env.GROK_SERVER || '',
+        key: process.env.GROK_KEY || '',
+      },
     }
   }
 
@@ -104,6 +112,10 @@ export class ConfigService {
         server: config.geminiImage.server,
         key: this.maskKey(config.geminiImage.key),
       },
+      grok: {
+        server: config.grok.server,
+        key: this.maskKey(config.grok.key),
+      },
     }
   }
 
@@ -135,7 +147,7 @@ export class ConfigService {
    * 更新单个服务配置
    */
   updateServiceConfig(
-    service: 'sora' | 'veo' | 'geminiImage',
+    service: 'sora' | 'veo' | 'geminiImage' | 'grok',
     config: { server?: string; key?: string; characterServer?: string; characterKey?: string },
   ): AppConfig {
     const currentConfig = this.getConfig()
@@ -151,6 +163,9 @@ export class ConfigService {
     } else if (service === 'geminiImage') {
       if (config.server !== undefined) currentConfig.geminiImage.server = config.server
       if (config.key !== undefined) currentConfig.geminiImage.key = config.key
+    } else if (service === 'grok') {
+      if (config.server !== undefined) currentConfig.grok.server = config.server
+      if (config.key !== undefined) currentConfig.grok.key = config.key
     }
 
     this.config = currentConfig
@@ -200,5 +215,9 @@ export class ConfigService {
 
   getGeminiImageConfig() {
     return this.getConfig().geminiImage
+  }
+
+  getGrokConfig() {
+    return this.getConfig().grok
   }
 }
