@@ -32,6 +32,7 @@ api.interceptors.response.use(
       const url = error.config?.url || ''
       if (!url.includes('/v1/auth/login')) {
         localStorage.removeItem('auth_token')
+        localStorage.removeItem('auth_userId')
         localStorage.removeItem('auth_username')
         localStorage.removeItem('auth_role')
         window.location.href = '/login'
@@ -46,8 +47,15 @@ api.interceptors.response.use(
 export const authApi = {
   // 登录
   login: (username: string, password: string) =>
-    api.post<{ status: string; data: { token: string; username: string; role: string } }>(
+    api.post<{ status: string; data: { token: string; userId: string; username: string; role: string } }>(
       '/v1/auth/login',
+      { username, password },
+    ),
+
+  // 注册
+  register: (username: string, password: string) =>
+    api.post<{ status: string; data: { token: string; userId: string; username: string; role: string } }>(
+      '/v1/auth/register',
       { username, password },
     ),
 

@@ -10,7 +10,7 @@ import { UserConfigService } from '../user-config/user-config.service'
 // 图片任务接口
 interface ImageTask {
   taskId: string
-  username: string
+  userId: string
   status: 'processing' | 'completed' | 'failed'
   prompt: string
   model: string
@@ -42,26 +42,26 @@ export class GeminiImageService {
   /**
    * 获取用户级 API 配置（优先用户配置，回退全局配置）
    */
-  private async getUserGeminiImageConfig(username: string) {
+  private async getUserGeminiImageConfig(userId: string) {
     try {
-      const userConfig = await this.userConfigService.getUserConfig(username)
+      const userConfig = await this.userConfigService.getUserConfig(userId)
       if (userConfig.geminiImage?.server) {
         return userConfig.geminiImage
       }
     } catch (e) {
-      this.logger.warn(`⚠️ Failed to load user config for ${username}, using global`)
+      this.logger.warn(`⚠️ Failed to load user config for ${userId}, using global`)
     }
     return this.configService.getGeminiImageConfig()
   }
 
-  private async getUserGrokImageConfig(username: string) {
+  private async getUserGrokImageConfig(userId: string) {
     try {
-      const userConfig = await this.userConfigService.getUserConfig(username)
+      const userConfig = await this.userConfigService.getUserConfig(userId)
       if (userConfig.grokImage?.server) {
         return userConfig.grokImage
       }
     } catch (e) {
-      this.logger.warn(`⚠️ Failed to load user config for ${username}, using global`)
+      this.logger.warn(`⚠️ Failed to load user config for ${userId}, using global`)
     }
     return this.configService.getGrokImageConfig()
   }
@@ -107,7 +107,7 @@ export class GeminiImageService {
   /**
    * 创建图片生成任务
    */
-  async createImage(dto: CreateImageDto, username: string): Promise<{ id: string; status: string }> {
+  async createImage(dto: CreateImageDto, userId: string): Promise<{ id: string; status: string }> {
     const taskId = randomUUID()
     const model = dto.model || 'gemini-3-pro-image-preview'
     const aspectRatio = dto.aspectRatio || '1:1'
@@ -116,7 +116,7 @@ export class GeminiImageService {
     // 创建任务记录到 MongoDB
     const task: ImageTask = {
       taskId,
-      username,
+      userId,
       status: 'processing',
       prompt: dto.prompt,
       model,
@@ -126,12 +126,12 @@ export class GeminiImageService {
     }
     await this.saveTask(task)
 
-    this.logger.log(`📤 Creating image task: ${taskId} for user: ${username}`)
+    this.logger.log(`📤 Creating image task: ${taskId} for userId: ${userId}`)
     this.logger.log(`📝 Prompt: ${dto.prompt}`)
     this.logger.log(`📐 Aspect Ratio: ${aspectRatio}, Size: ${imageSize}`)
 
     // 异步处理图片生成
-    this.processImageGeneration(taskId, dto, username).catch((error) => {
+    this.processImageGeneration(taskId, dto, userId).catch((error) => {
       this.logger.error(`❌ Image generation failed: ${error.message}`)
     })
 
@@ -141,7 +141,7 @@ export class GeminiImageService {
   /**
    * 异步处理图片生成
    */
-  private async processImageGeneration(taskId: string, dto: CreateImageDto, username: string): Promise<void> {
+  private async processImageGeneration(taskId: string, dto: CreateImageDto, userId: string): Promise<void> {
     const task = await this.getTask(taskId)
     if (!task) return
 
@@ -151,13 +151,13 @@ export class GeminiImageService {
       let rawImages: Array<{ mimeType: string; data: string }>
 
       if (this.isGrokImageModel(model)) {
-        rawImages = await this.callGrokImageApi(dto, username)
+        rawImages = await this.callGrokImageApi(dto, userId)
       } else {
-        rawImages = await this.callGeminiImageApi(dto, username)
+        rawImages = await this.callGeminiImageApi(dto, userId)
       }
 
       if (rawImages.length > 0) {
-        const savedImages = this.fileStorageService.saveBase64Images(username, rawImages, taskId)
+        const savedImages = this.fileStorageService.saveBase64Images(userId, rawImages, taskId)
         task.status = 'completed'
         task.images = savedImages
         this.logger.log(`✅ Task ${taskId} completed with ${savedImages.length} image(s) saved to disk`)
@@ -178,7 +178,7 @@ export class GeminiImageService {
   /**
    * 调用 Gemini API 生成图片
    */
-  private async callGeminiImageApi(dto: CreateImageDto, username: string): Promise<Array<{ mimeType: string; data: string }>> {
+  private async callGeminiImageApi(dto: CreateImageDto, userId: string): Promise<Array<{ mimeType: string; data: string }>> {
     const model = dto.model || 'gemini-3-pro-image-preview'
     const aspectRatio = dto.aspectRatio || '1:1'
     const imageSize = dto.imageSize || '1K'
@@ -205,7 +205,7 @@ export class GeminiImageService {
     }
 
     this.logger.log(`📤 Sending request to Gemini API, model: ${model}`)
-    const geminiConfig = await this.getUserGeminiImageConfig(username)
+    const geminiConfig = await this.getUserGeminiImageConfig(userId)
     const httpClient = this.createHttpClientWithConfig(geminiConfig)
     const response = await httpClient.post(`/v1beta/models/${model}:generateContent`, payload)
     this.logger.log(`✅ Gemini API response received`)
@@ -218,7 +218,7 @@ export class GeminiImageService {
    * 请求格式: { model, size, n, prompt, image? }
    * 响应格式: { data: [{ b64_json, url }] }
    */
-  private async callGrokImageApi(dto: CreateImageDto, username: string): Promise<Array<{ mimeType: string; data: string }>> {
+  private async callGrokImageApi(dto: CreateImageDto, userId: string): Promise<Array<{ mimeType: string; data: string }>> {
     const model = dto.model || 'grok-4-1-image'
     const size = dto.size || '1024x1024'
     const n = dto.n || 1
@@ -239,7 +239,7 @@ export class GeminiImageService {
     }
 
     this.logger.log(`📤 Sending request to Grok Image API, model: ${model}, size: ${size}, n: ${n}`)
-    const grokConfig = await this.getUserGrokImageConfig(username)
+    const grokConfig = await this.getUserGrokImageConfig(userId)
     this.logger.log(`🔧 Grok Image Server: ${grokConfig.server}`)
     const httpClient = this.createGrokHttpClientWithConfig(grokConfig)
 
@@ -351,7 +351,7 @@ export class GeminiImageService {
       model: task.model,
       aspectRatio: task.aspectRatio,
       imageSize: task.imageSize,
-      username: task.username,
+      username: task.userId,
       createdAt: task.createdAt,
     }
 
@@ -370,25 +370,25 @@ export class GeminiImageService {
   /**
    * 直接生成图片（同步方式，返回完整结果）
    */
-  async generateImageSync(dto: CreateImageDto, username: string): Promise<any> {
+  async generateImageSync(dto: CreateImageDto, userId: string): Promise<any> {
     const taskId = randomUUID()
     const model = dto.model || 'gemini-3-pro-image-preview'
 
-    this.logger.log(`📤 Generating image synchronously for user: ${username}`)
+    this.logger.log(`📤 Generating image synchronously for userId: ${userId}`)
     this.logger.log(`📝 Prompt: ${dto.prompt}`)
     this.logger.log(`🤖 Model: ${model}`)
 
     let rawImages: Array<{ mimeType: string; data: string }>
 
     if (this.isGrokImageModel(model)) {
-      rawImages = await this.callGrokImageApi(dto, username)
+      rawImages = await this.callGrokImageApi(dto, userId)
     } else {
-      rawImages = await this.callGeminiImageApi(dto, username)
+      rawImages = await this.callGeminiImageApi(dto, userId)
     }
 
     // 将 Base64 图片保存为文件
     const savedImages = rawImages.length > 0
-      ? this.fileStorageService.saveBase64Images(username, rawImages, taskId)
+      ? this.fileStorageService.saveBase64Images(userId, rawImages, taskId)
       : []
 
     const status = savedImages.length > 0 ? 'completed' : 'failed'
@@ -396,7 +396,7 @@ export class GeminiImageService {
     // 同步模式也记录到 MongoDB image_tasks
     const task: ImageTask = {
       taskId,
-      username,
+      userId,
       status: status as 'completed' | 'failed',
       prompt: dto.prompt || '',
       model,
@@ -439,7 +439,7 @@ export class GeminiImageService {
     if (!doc) return null
     return {
       taskId: doc.taskId,
-      username: doc.username || 'unknown',
+      userId: doc.userId || doc.username || 'unknown',
       status: doc.status,
       prompt: doc.prompt,
       model: doc.model,

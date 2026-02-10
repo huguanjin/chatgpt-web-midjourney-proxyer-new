@@ -27,11 +27,11 @@ export class VideoTasksController {
    */
   @Get()
   async getUserTasks(@Req() req: any, @Query() query: QueryVideoTaskDto) {
-    const username = req.user.username
-    this.logger.log(`📋 Getting tasks for user: ${username}`)
+    const userId = req.user.userId
+    this.logger.log(`📋 Getting tasks for userId: ${userId}`)
 
     try {
-      const result = await this.videoTasksService.getUserTasks(username, {
+      const result = await this.videoTasksService.getUserTasks(userId, {
         platform: query.platform,
         status: query.status,
         page: query.page ? parseInt(query.page, 10) : 1,
@@ -60,10 +60,10 @@ export class VideoTasksController {
    */
   @Delete(':externalTaskId')
   async deleteTask(@Req() req: any, @Param('externalTaskId') externalTaskId: string) {
-    const username = req.user.username
-    this.logger.log(`🗑️ Deleting task ${externalTaskId} for user ${username}`)
+    const userId = req.user.userId
+    this.logger.log(`🗑️ Deleting task ${externalTaskId} for userId ${userId}`)
 
-    const deleted = await this.videoTasksService.deleteTask(username, externalTaskId)
+    const deleted = await this.videoTasksService.deleteTask(userId, externalTaskId)
     if (!deleted) {
       throw new HttpException(
         { status: 'error', message: '任务不存在或无权删除' },
@@ -80,10 +80,10 @@ export class VideoTasksController {
    */
   @Delete('completed/clear')
   async clearCompletedTasks(@Req() req: any) {
-    const username = req.user.username
-    this.logger.log(`🧹 Clearing completed tasks for user ${username}`)
+    const userId = req.user.userId
+    this.logger.log(`🧹 Clearing completed tasks for userId ${userId}`)
 
-    const count = await this.videoTasksService.deleteCompletedTasks(username)
+    const count = await this.videoTasksService.deleteCompletedTasks(userId)
     return {
       status: 'success',
       message: `已清除 ${count} 个已完成的任务`,

@@ -12,8 +12,8 @@ export interface VideoTaskDocument {
   /** 外部任务 ID（第三方 API 返回的 ID） */
   externalTaskId: string
 
-  /** 所属用户名 */
-  username: string
+  /** 所属用户 ID（MongoDB _id） */
+  userId: string
 
   /** 平台: sora / veo / grok */
   platform: 'sora' | 'veo' | 'grok'
@@ -71,8 +71,8 @@ export class VideoTasksService implements OnApplicationBootstrap {
     try {
       const col = this.databaseService.getCollection(this.COLLECTION)
       await col.createIndex({ externalTaskId: 1 }, { unique: true })
-      await col.createIndex({ username: 1, createdAt: -1 })
-      await col.createIndex({ username: 1, platform: 1 })
+      await col.createIndex({ userId: 1, createdAt: -1 })
+      await col.createIndex({ userId: 1, platform: 1 })
       await col.createIndex({ status: 1 })
       await col.createIndex({ createdAt: -1 })
       this.logger.log('📇 video_tasks indexes ensured')
@@ -84,11 +84,11 @@ export class VideoTasksService implements OnApplicationBootstrap {
   /**
    * 创建任务记录
    */
-  async createTask(username: string, dto: CreateVideoTaskDto): Promise<VideoTaskDocument> {
+  async createTask(userId: string, dto: CreateVideoTaskDto): Promise<VideoTaskDocument> {
     const now = Date.now()
     const doc: VideoTaskDocument = {
       externalTaskId: dto.externalTaskId,
-      username,
+      userId,
       platform: dto.platform,
       model: dto.model,
       prompt: dto.prompt,
@@ -117,7 +117,7 @@ export class VideoTasksService implements OnApplicationBootstrap {
     const col = this.databaseService.getCollection(this.COLLECTION)
     await col.insertOne(doc as any)
 
-    this.logger.log(`📝 Task created: ${dto.externalTaskId} [${dto.platform}] for user ${username}`)
+    this.logger.log(`📝 Task created: ${dto.externalTaskId} [${dto.platform}] for userId ${userId}`)
     return doc
   }
 
@@ -149,7 +149,7 @@ export class VideoTasksService implements OnApplicationBootstrap {
    * 获取用户的任务列表（分页）
    */
   async getUserTasks(
-    username: string,
+    userId: string,
     options?: {
       platform?: 'sora' | 'veo' | 'grok'
       status?: string
@@ -158,7 +158,7 @@ export class VideoTasksService implements OnApplicationBootstrap {
     },
   ): Promise<{ tasks: VideoTaskDocument[]; total: number }> {
     const col = this.databaseService.getCollection(this.COLLECTION)
-    const filter: Record<string, any> = { username }
+    const filter: Record<string, any> = { userId }
 
     if (options?.platform) {
       filter.platform = options.platform
@@ -190,18 +190,18 @@ export class VideoTasksService implements OnApplicationBootstrap {
   /**
    * 删除用户的某个任务
    */
-  async deleteTask(username: string, externalTaskId: string): Promise<boolean> {
+  async deleteTask(userId: string, externalTaskId: string): Promise<boolean> {
     const col = this.databaseService.getCollection(this.COLLECTION)
-    const result = await col.deleteOne({ username, externalTaskId })
+    const result = await col.deleteOne({ userId, externalTaskId })
     return result.deletedCount > 0
   }
 
   /**
    * 批量删除用户已完成的任务
    */
-  async deleteCompletedTasks(username: string): Promise<number> {
+  async deleteCompletedTasks(userId: string): Promise<number> {
     const col = this.databaseService.getCollection(this.COLLECTION)
-    const result = await col.deleteMany({ username, status: 'completed' })
+    const result = await col.deleteMany({ userId, status: 'completed' })
     return result.deletedCount
   }
 }

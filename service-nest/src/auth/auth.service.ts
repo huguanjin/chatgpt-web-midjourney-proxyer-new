@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnApplicationBootstrap, Inject, forwardRef } from '@nestjs/common'
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto'
+import { ObjectId } from 'mongodb'
 import * as fs from 'fs'
 import * as path from 'path'
 import { DatabaseService } from '../database/database.service'
@@ -67,11 +68,12 @@ export class AuthService implements OnApplicationBootstrap {
       last_login: null,
     }
 
-    await collection.insertOne(adminUser as any)
+    const result = await collection.insertOne(adminUser as any)
+    const adminId = result.insertedId.toString()
     this.logger.log('✅ Default admin account created')
 
-    // 为管理员初始化默认 API 配置
-    await this.userConfigService.initUserConfig(username)
+    // 为管理员初始化默认 API 配置（使用 userId）
+    await this.userConfigService.initUserConfig(adminId)
     this.logger.log('📋 Default API config initialized for admin')
 
     // 将初始账号密码写入 txt 文件
@@ -83,14 +85,42 @@ export class AuthService implements OnApplicationBootstrap {
    */
   private async ensureAllUsersHaveConfig() {
     try {
-      const usersCol = this.databaseService.getDb().collection('users')
-      const users = await usersCol.find({}, { projection: { username: 1 } }).toArray()
+      const db = this.databaseService.getDb()
+      const usersCol = db.collection('users')
+      const users = await usersCol.find({}, { projection: { _id: 1, username: 1 } }).toArray()
+
+      // 迁移旧数据：将 username 键替换为 userId
+      const configCol = db.collection('user_configs')
+      const tasksCol = db.collection('video_tasks')
+      const imageCol = db.collection('image_tasks')
 
       for (const user of users) {
-        await this.userConfigService.initUserConfig((user as any).username)
+        const userId = (user as any)._id.toString()
+        const uname = (user as any).username
+
+        // 迁移 user_configs（username → userId）
+        await configCol.updateMany(
+          { username: uname, userId: { $exists: false } },
+          { $set: { userId }, $unset: { username: '' } },
+        )
+        // 迁移 video_tasks
+        await tasksCol.updateMany(
+          { username: uname, userId: { $exists: false } },
+          { $set: { userId } },
+        )
+        // 迁移 image_tasks
+        await imageCol.updateMany(
+          { username: uname, userId: { $exists: false } },
+          { $set: { userId } },
+        )
+
+        await this.userConfigService.initUserConfig(userId)
       }
 
-      this.logger.log(`📋 Ensured config exists for ${users.length} user(s)`)
+      // 尝试删除旧的唯一索引
+      try { await configCol.dropIndex('username_1') } catch {}
+
+      this.logger.log(`📋 Ensured config & migrated data for ${users.length} user(s)`)
     } catch (error) {
       this.logger.warn(`⚠️ Failed to ensure user configs: ${error.message}`)
     }
@@ -162,49 +192,77 @@ export class AuthService implements OnApplicationBootstrap {
   /**
    * 登录验证
    */
-  async validateUser(username: string, password: string): Promise<UserDocument | null> {
+  async validateUser(username: string, password: string): Promise<any | null> {
     const collection = this.databaseService.getDb().collection('users')
-    const user = await collection.findOne({ username }) as any
-
+    const user = await collection.findOne({ username })
     if (!user) return null
 
-    if (!this.verifyPassword(password, user.password)) {
-      return null
-    }
+    if (!this.verifyPassword(password, (user as any).password)) return null
 
-    // 更新最后登录时间
     await collection.updateOne(
-      { username },
+      { _id: (user as any)._id },
       { $set: { last_login: new Date() } },
     )
-
-    return user as UserDocument
+    return user
   }
 
   /**
    * 通过用户名查找用户
    */
-  async findByUsername(username: string): Promise<UserDocument | null> {
+  async findById(userId: string): Promise<UserDocument | null> {
     const collection = this.databaseService.getDb().collection('users')
-    const user = await collection.findOne({ username }) as any
+    const user = await collection.findOne({ _id: new ObjectId(userId) }) as any
     return user || null
   }
 
   /**
    * 修改密码
    */
-  async changePassword(username: string, oldPassword: string, newPassword: string): Promise<boolean> {
-    const user = await this.validateUser(username, oldPassword)
+  async changePassword(userId: string, oldPassword: string, newPassword: string): Promise<boolean> {
+    const collection = this.databaseService.getDb().collection('users')
+    const user = await collection.findOne({ _id: new ObjectId(userId) }) as any
     if (!user) return false
+    if (!this.verifyPassword(oldPassword, user.password)) return false
 
     const hashedPassword = this.hashPassword(newPassword)
-    const collection = this.databaseService.getDb().collection('users')
     await collection.updateOne(
-      { username },
+      { _id: new ObjectId(userId) },
       { $set: { password: hashedPassword } },
     )
 
-    this.logger.log(`🔑 Password changed for user: ${username}`)
+    this.logger.log(`🔑 Password changed for userId: ${userId}`)
     return true
+  }
+
+  /**
+   * 注册新用户
+   */
+  async register(username: string, password: string): Promise<any> {
+    const collection = this.databaseService.getDb().collection('users')
+
+    // 检查用户名是否已存在
+    const existing = await collection.findOne({ username })
+    if (existing) {
+      throw new Error('用户名已存在，请换一个')
+    }
+
+    const hashedPassword = this.hashPassword(password)
+    const newUser: UserDocument = {
+      username,
+      password: hashedPassword,
+      role: 'user',
+      created_at: new Date(),
+      last_login: null,
+    }
+
+    const result = await collection.insertOne(newUser as any)
+    const userId = result.insertedId.toString()
+    this.logger.log(`✅ New user registered: ${username} (userId: ${userId})`)
+
+    // 初始化用户默认 API 配置（用 userId 作为标识）
+    await this.userConfigService.initUserConfig(userId)
+    this.logger.log(`📋 Default API config initialized for userId: ${userId}`)
+
+    return { ...newUser, _id: result.insertedId }
   }
 }

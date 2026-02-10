@@ -41,7 +41,7 @@ export class GrokVideoController {
     @UploadedFiles() files?: Express.Multer.File[],
     @Req() req?: any,
   ) {
-    const username = req?.user?.username || 'unknown'
+    const userId = req?.user?.userId || 'unknown'
     this.logger.log(`📹 Creating Grok video with model: ${createVideoDto.model}`)
     this.logger.log(`📝 Prompt: ${createVideoDto.prompt}`)
     if (files && files.length > 0) {
@@ -49,12 +49,12 @@ export class GrokVideoController {
     }
 
     try {
-      const result = await this.grokVideoService.createVideo(createVideoDto, files, username)
+      const result = await this.grokVideoService.createVideo(createVideoDto, files, userId)
       this.logger.log(`✅ Grok video task created: ${result.id}`)
 
       // 记录任务到数据库
       try {
-        await this.videoTasksService.createTask(username, {
+        await this.videoTasksService.createTask(userId, {
           externalTaskId: result.id,
           platform: 'grok',
           model: createVideoDto.model || 'grok-video-3',
@@ -96,10 +96,10 @@ export class GrokVideoController {
   @Get('query')
   async queryVideo(@Query() queryDto: QueryGrokVideoDto, @Req() req?: any) {
     this.logger.log(`🔍 Querying Grok video task: ${queryDto.id}`)
-    const username = req?.user?.username || 'unknown'
+    const userId = req?.user?.userId || 'unknown'
 
     try {
-      const result = await this.grokVideoService.queryVideo(queryDto.id, username)
+      const result = await this.grokVideoService.queryVideo(queryDto.id, userId)
       this.logger.log(`📊 Grok task status: ${result.status}`)
 
       // 更新数据库中的任务状态

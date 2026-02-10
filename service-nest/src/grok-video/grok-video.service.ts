@@ -21,14 +21,14 @@ export class GrokVideoService {
   /**
    * 获取用户级 Grok 配置（优先用户配置，回退全局配置）
    */
-  private async getUserGrokConfig(username: string) {
+  private async getUserGrokConfig(userId: string) {
     try {
-      const userConfig = await this.userConfigService.getUserConfig(username)
+      const userConfig = await this.userConfigService.getUserConfig(userId)
       if (userConfig.grok?.server) {
         return userConfig.grok
       }
     } catch (e) {
-      this.logger.warn(`⚠️ Failed to load user config for ${username}, using global`)
+      this.logger.warn(`⚠️ Failed to load user config for ${userId}, using global`)
     }
     return this.configService.getGrokConfig()
   }
@@ -37,8 +37,8 @@ export class GrokVideoService {
    * 创建 Grok 视频任务（支持参考图）
    * API: POST /v1/videos (multipart/form-data)
    */
-  async createVideo(dto: CreateGrokVideoDto, files?: Express.Multer.File[], username?: string): Promise<any> {
-    const config = await this.getUserGrokConfig(username || 'unknown')
+  async createVideo(dto: CreateGrokVideoDto, files?: Express.Multer.File[], userId?: string): Promise<any> {
+    const config = await this.getUserGrokConfig(userId || 'unknown')
 
     this.logger.log(`📤 Creating Grok video with model: ${dto.model}`)
     this.logger.log(`📝 Prompt: ${dto.prompt}`)
@@ -91,8 +91,8 @@ export class GrokVideoService {
    * 查询 Grok 视频任务状态
    * API: GET /v1/videos/{taskId}
    */
-  async queryVideo(taskId: string, username?: string): Promise<any> {
-    const config = await this.getUserGrokConfig(username || 'unknown')
+  async queryVideo(taskId: string, userId?: string): Promise<any> {
+    const config = await this.getUserGrokConfig(userId || 'unknown')
 
     this.logger.log(`📤 Querying Grok task: ${taskId}`)
 

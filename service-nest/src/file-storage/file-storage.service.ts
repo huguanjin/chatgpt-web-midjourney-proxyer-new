@@ -25,10 +25,10 @@ export class FileStorageService {
   /**
    * 确保用户目录存在
    */
-  private ensureUserDir(username: string): string {
-    // 安全处理用户名（只保留字母数字下划线横杠）
-    const safeUsername = username.replace(/[^a-zA-Z0-9_\-]/g, '_')
-    const userDir = path.join(this.baseDir, safeUsername)
+  private ensureUserDir(userId: string): string {
+    // 使用 userId 作为目录名（安全处理）
+    const safeId = userId.replace(/[^a-zA-Z0-9_\-]/g, '_')
+    const userDir = path.join(this.baseDir, safeId)
     if (!fs.existsSync(userDir)) {
       fs.mkdirSync(userDir, { recursive: true })
       this.logger.log(`📁 Created user image directory: ${userDir}`)
@@ -41,12 +41,12 @@ export class FileStorageService {
    * @returns 文件的相对 URL 路径（如 /uploads/images/admin/xxxxx.png）
    */
   saveBase64Image(
-    username: string,
+    userId: string,
     base64Data: string,
     mimeType: string,
     filename: string,
   ): string {
-    const userDir = this.ensureUserDir(username)
+    const userDir = this.ensureUserDir(userId)
 
     // 去除 data URI 前缀（如 "data:image/png;base64,"）
     let cleanBase64 = base64Data
@@ -69,8 +69,8 @@ export class FileStorageService {
 
     fs.writeFileSync(filePath, new Uint8Array(buffer))
 
-    const safeUsername = username.replace(/[^a-zA-Z0-9_\-]/g, '_')
-    const urlPath = `/uploads/images/${safeUsername}/${finalFilename}`
+    const safeId = userId.replace(/[^a-zA-Z0-9_\-]/g, '_')
+    const urlPath = `/uploads/images/${safeId}/${finalFilename}`
 
     this.logger.log(`💾 Saved image: ${filePath} (${(buffer.length / 1024).toFixed(1)} KB, ${actualMime})`)
     return urlPath
@@ -81,13 +81,13 @@ export class FileStorageService {
    * @returns 保存后的文件 URL 路径数组
    */
   saveBase64Images(
-    username: string,
+    userId: string,
     images: Array<{ mimeType: string; data: string }>,
     taskId: string,
   ): Array<{ mimeType: string; url: string }> {
     return images.map((img, index) => {
       const filename = `${taskId}_${index}`
-      const url = this.saveBase64Image(username, img.data, img.mimeType, filename)
+      const url = this.saveBase64Image(userId, img.data, img.mimeType, filename)
       return { mimeType: img.mimeType, url }
     })
   }

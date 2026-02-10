@@ -25,9 +25,9 @@ export class UserConfigController {
    */
   @Get()
   async getMyConfig(@Req() req: any) {
-    const { username } = req.user
-    this.logger.log(`📥 Get user config: ${username}`)
-    const config = await this.userConfigService.getUserConfigForDisplay(username)
+    const { userId } = req.user
+    this.logger.log(`📥 Get user config: ${userId}`)
+    const config = await this.userConfigService.getUserConfigForDisplay(userId)
     return {
       status: 'success',
       data: config,
@@ -40,9 +40,9 @@ export class UserConfigController {
    */
   @Get('full')
   async getMyFullConfig(@Req() req: any) {
-    const { username } = req.user
-    this.logger.log(`📥 Get user full config: ${username}`)
-    const config = await this.userConfigService.getUserConfig(username)
+    const { userId } = req.user
+    this.logger.log(`📥 Get user full config: ${userId}`)
+    const config = await this.userConfigService.getUserConfig(userId)
     return {
       status: 'success',
       data: config,
@@ -59,21 +59,21 @@ export class UserConfigController {
     @Req() req: any,
     @Body() body: { server: string; key: string; services?: string[] },
   ) {
-    const { username } = req.user
-    this.logger.log(`🔄 Sync default config for user: ${username}`)
+    const { userId } = req.user
+    this.logger.log(`🔄 Sync default config for userId: ${userId}`)
 
     try {
       const validServices = (body.services || ['sora', 'veo', 'geminiImage', 'grok', 'grokImage'])
         .filter(s => ['sora', 'veo', 'geminiImage', 'grok', 'grokImage'].includes(s)) as Array<'sora' | 'veo' | 'geminiImage' | 'grok' | 'grokImage'>
 
       await this.userConfigService.syncDefaultToAll(
-        username,
+        userId,
         body.server,
         body.key,
         { services: validServices },
       )
 
-      const displayConfig = await this.userConfigService.getUserConfigForDisplay(username)
+      const displayConfig = await this.userConfigService.getUserConfigForDisplay(userId)
       return {
         status: 'success',
         message: `已同步到 ${validServices.join(', ')}`,
@@ -97,8 +97,8 @@ export class UserConfigController {
     @Param('service') service: string,
     @Body() dto: UpdateUserServiceConfigDto,
   ) {
-    const { username } = req.user
-    this.logger.log(`📝 Update user ${service} config: ${username}`)
+    const { userId } = req.user
+    this.logger.log(`📝 Update user ${service} config: ${userId}`)
 
     if (!['sora', 'veo', 'geminiImage', 'grok', 'grokImage'].includes(service)) {
       return {
@@ -109,11 +109,11 @@ export class UserConfigController {
 
     try {
       await this.userConfigService.updateUserServiceConfig(
-        username,
+        userId,
         service as 'sora' | 'veo' | 'geminiImage' | 'grok' | 'grokImage',
         dto,
       )
-      const displayConfig = await this.userConfigService.getUserConfigForDisplay(username)
+      const displayConfig = await this.userConfigService.getUserConfigForDisplay(userId)
       return {
         status: 'success',
         message: `${service} 配置已更新`,

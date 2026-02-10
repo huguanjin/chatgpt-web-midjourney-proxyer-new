@@ -8,9 +8,19 @@ const authStore = useAuthStore()
 
 const username = ref('')
 const password = ref('')
+const confirmPassword = ref('')
 const isLoading = ref(false)
 const errorMsg = ref('')
+const successMsg = ref('')
 const showPassword = ref(false)
+const showConfirmPassword = ref(false)
+const isRegisterMode = ref(false)
+
+const switchMode = () => {
+  isRegisterMode.value = !isRegisterMode.value
+  errorMsg.value = ''
+  successMsg.value = ''
+}
 
 const handleLogin = async () => {
   if (!username.value.trim()) {
@@ -34,6 +44,54 @@ const handleLogin = async () => {
     isLoading.value = false
   }
 }
+
+const handleRegister = async () => {
+  const trimmedUsername = username.value.trim()
+  if (!trimmedUsername) {
+    errorMsg.value = '请输入用户名'
+    return
+  }
+  if (trimmedUsername.length > 20) {
+    errorMsg.value = '用户名最多 20 个字符'
+    return
+  }
+  if (!password.value) {
+    errorMsg.value = '请输入密码'
+    return
+  }
+  if (password.value.length < 6) {
+    errorMsg.value = '密码长度至少 6 个字符'
+    return
+  }
+  if (password.value !== confirmPassword.value) {
+    errorMsg.value = '两次输入的密码不一致'
+    return
+  }
+
+  isLoading.value = true
+  errorMsg.value = ''
+  successMsg.value = ''
+
+  try {
+    await authStore.register(trimmedUsername, password.value)
+    successMsg.value = `注册成功！欢迎 ${trimmedUsername}，正在跳转...`
+    setTimeout(() => {
+      router.push('/')
+    }, 1200)
+  } catch (err: any) {
+    errorMsg.value = err.response?.data?.message || err.message || '注册失败，请稍后重试'
+  } finally {
+    isLoading.value = false
+  }
+}
+
+const handleSubmit = () => {
+  if (isRegisterMode.value) {
+    handleRegister()
+  } else {
+    handleLogin()
+  }
+}
 </script>
 
 <template>
@@ -46,11 +104,23 @@ const handleLogin = async () => {
         <p class="login-subtitle">Sora · VEO · Gemini · Grok</p>
       </div>
 
-      <!-- 登录表单 -->
+      <!-- 登录/注册表单 -->
       <div class="login-card">
-        <h2 class="login-card-title">用户登录</h2>
+        <!-- 模式切换 Tab -->
+        <div class="mode-tabs">
+          <button
+            class="mode-tab"
+            :class="{ active: !isRegisterMode }"
+            @click="isRegisterMode = false; errorMsg = ''; successMsg = ''"
+          >登录</button>
+          <button
+            class="mode-tab"
+            :class="{ active: isRegisterMode }"
+            @click="isRegisterMode = true; errorMsg = ''; successMsg = ''"
+          >注册</button>
+        </div>
 
-        <form @submit.prevent="handleLogin" class="login-form">
+        <form @submit.prevent="handleSubmit" class="login-form">
           <div class="login-field">
             <label class="login-label">用户名</label>
             <div class="login-input-wrapper">
@@ -59,9 +129,9 @@ const handleLogin = async () => {
                 v-model="username"
                 type="text"
                 class="login-input"
-                placeholder="请输入用户名"
+                :placeholder="isRegisterMode ? '1-20个字符' : '请输入用户名'"
                 autocomplete="username"
-                @keyup.enter="handleLogin"
+                @keyup.enter="handleSubmit"
               />
             </div>
           </div>
@@ -74,9 +144,9 @@ const handleLogin = async () => {
                 v-model="password"
                 :type="showPassword ? 'text' : 'password'"
                 class="login-input"
-                placeholder="请输入密码"
-                autocomplete="current-password"
-                @keyup.enter="handleLogin"
+                :placeholder="isRegisterMode ? '至少6个字符' : '请输入密码'"
+                :autocomplete="isRegisterMode ? 'new-password' : 'current-password'"
+                @keyup.enter="handleSubmit"
               />
               <button
                 type="button"
@@ -88,9 +158,37 @@ const handleLogin = async () => {
             </div>
           </div>
 
+          <!-- 确认密码（仅注册模式） -->
+          <div v-if="isRegisterMode" class="login-field">
+            <label class="login-label">确认密码</label>
+            <div class="login-input-wrapper">
+              <span class="login-input-icon">🔒</span>
+              <input
+                v-model="confirmPassword"
+                :type="showConfirmPassword ? 'text' : 'password'"
+                class="login-input"
+                placeholder="请再次输入密码"
+                autocomplete="new-password"
+                @keyup.enter="handleSubmit"
+              />
+              <button
+                type="button"
+                class="login-toggle-pwd"
+                @click="showConfirmPassword = !showConfirmPassword"
+              >
+                {{ showConfirmPassword ? '🙈' : '👁️' }}
+              </button>
+            </div>
+          </div>
+
           <!-- 错误提示 -->
           <div v-if="errorMsg" class="login-error">
             ❌ {{ errorMsg }}
+          </div>
+
+          <!-- 成功提示 -->
+          <div v-if="successMsg" class="login-success">
+            ✅ {{ successMsg }}
           </div>
 
           <button
@@ -99,8 +197,22 @@ const handleLogin = async () => {
             :disabled="isLoading"
           >
             <span v-if="isLoading" class="loading"></span>
-            {{ isLoading ? '登录中...' : '登 录' }}
+            <template v-if="isRegisterMode">
+              {{ isLoading ? '注册中...' : '注 册' }}
+            </template>
+            <template v-else>
+              {{ isLoading ? '登录中...' : '登 录' }}
+            </template>
           </button>
+
+          <p class="mode-switch-hint">
+            <template v-if="isRegisterMode">
+              已有账号？<a href="#" @click.prevent="switchMode">去登录</a>
+            </template>
+            <template v-else>
+              没有账号？<a href="#" @click.prevent="switchMode">去注册</a>
+            </template>
+          </p>
         </form>
       </div>
 
@@ -155,6 +267,38 @@ const handleLogin = async () => {
   border-radius: 16px;
   padding: 32px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+
+.mode-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 28px;
+  background: rgba(51, 65, 85, 0.4);
+  border-radius: 10px;
+  padding: 4px;
+}
+
+.mode-tab {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.mode-tab.active {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: white;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+.mode-tab:not(.active):hover {
+  color: #e2e8f0;
 }
 
 .login-card-title {
@@ -244,6 +388,15 @@ const handleLogin = async () => {
   font-size: 13px;
 }
 
+.login-success {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #22c55e;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
 .login-btn {
   width: 100%;
   padding: 14px;
@@ -272,6 +425,25 @@ const handleLogin = async () => {
   opacity: 0.6;
   cursor: not-allowed;
   transform: none;
+}
+
+.mode-switch-hint {
+  text-align: center;
+  font-size: 13px;
+  color: #94a3b8;
+  margin-top: 4px;
+}
+
+.mode-switch-hint a {
+  color: #818cf8;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.mode-switch-hint a:hover {
+  color: #a5b4fc;
+  text-decoration: underline;
 }
 
 .login-footer {

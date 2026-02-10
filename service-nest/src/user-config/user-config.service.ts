@@ -32,7 +32,7 @@ export interface UserApiConfig {
 }
 
 export interface UserConfigDocument {
-  username: string
+  userId: string
   config: UserApiConfig
   created_at: Date
   updated_at: Date
@@ -57,7 +57,7 @@ export class UserConfigService implements OnApplicationBootstrap {
   private async ensureIndexes() {
     try {
       const collection = this.databaseService.getDb().collection('user_configs')
-      await collection.createIndex({ username: 1 }, { unique: true })
+      await collection.createIndex({ userId: 1 }, { unique: true })
       this.logger.log('📇 user_configs collection indexes ensured')
     } catch (error) {
       this.logger.warn(`⚠️ user_configs index warning: ${error.message}`)
@@ -127,38 +127,38 @@ export class UserConfigService implements OnApplicationBootstrap {
   /**
    * 为用户创建初始配置
    */
-  async initUserConfig(username: string): Promise<UserConfigDocument> {
+  async initUserConfig(userId: string): Promise<UserConfigDocument> {
     const collection = this.databaseService.getDb().collection('user_configs')
 
     // 检查是否已存在
-    const existing = await collection.findOne({ username }) as any
+    const existing = await collection.findOne({ userId }) as any
     if (existing) {
-      this.logger.log(`📋 User config already exists for: ${username}`)
+      this.logger.log(`📋 User config already exists for userId: ${userId}`)
       return existing as UserConfigDocument
     }
 
     const doc: UserConfigDocument = {
-      username,
+      userId,
       config: this.getDefaultConfig(),
       created_at: new Date(),
       updated_at: new Date(),
     }
 
     await collection.insertOne(doc as any)
-    this.logger.log(`✅ Initialized default config for user: ${username}`)
+    this.logger.log(`✅ Initialized default config for userId: ${userId}`)
     return doc
   }
 
   /**
    * 获取用户配置
    */
-  async getUserConfig(username: string): Promise<UserApiConfig> {
+  async getUserConfig(userId: string): Promise<UserApiConfig> {
     const collection = this.databaseService.getDb().collection('user_configs')
-    const doc = await collection.findOne({ username }) as any
+    const doc = await collection.findOne({ userId }) as any
 
     if (!doc) {
       // 若不存在则自动初始化
-      const created = await this.initUserConfig(username)
+      const created = await this.initUserConfig(userId)
       return created.config
     }
 
@@ -177,8 +177,8 @@ export class UserConfigService implements OnApplicationBootstrap {
   /**
    * 获取用户配置（前端显示用，隐藏敏感信息）
    */
-  async getUserConfigForDisplay(username: string): Promise<any> {
-    const config = await this.getUserConfig(username)
+  async getUserConfigForDisplay(userId: string): Promise<any> {
+    const config = await this.getUserConfig(userId)
     return {
       sora: {
         server: config.sora?.server ?? '',
@@ -208,13 +208,13 @@ export class UserConfigService implements OnApplicationBootstrap {
   /**
    * 更新用户全部 API 配置
    */
-  async updateUserConfig(username: string, newConfig: Partial<UserApiConfig>): Promise<UserApiConfig> {
-    const currentConfig = await this.getUserConfig(username)
+  async updateUserConfig(userId: string, newConfig: Partial<UserApiConfig>): Promise<UserApiConfig> {
+    const currentConfig = await this.getUserConfig(userId)
     const merged = this.deepMerge(currentConfig, newConfig)
 
     const collection = this.databaseService.getDb().collection('user_configs')
     await collection.updateOne(
-      { username },
+      { userId },
       {
         $set: {
           config: merged,
@@ -224,7 +224,7 @@ export class UserConfigService implements OnApplicationBootstrap {
       { upsert: true },
     )
 
-    this.logger.log(`✅ Config updated for user: ${username}`)
+    this.logger.log(`✅ Config updated for userId: ${userId}`)
     return merged
   }
 
@@ -232,11 +232,11 @@ export class UserConfigService implements OnApplicationBootstrap {
    * 更新用户单个服务的配置
    */
   async updateUserServiceConfig(
-    username: string,
+    userId: string,
     service: 'sora' | 'veo' | 'geminiImage' | 'grok' | 'grokImage',
     serviceConfig: { server?: string; key?: string; characterServer?: string; characterKey?: string },
   ): Promise<UserApiConfig> {
-    const config = await this.getUserConfig(username)
+    const config = await this.getUserConfig(userId)
 
     if (service === 'sora') {
       if (serviceConfig.server !== undefined) config.sora.server = serviceConfig.server
@@ -259,7 +259,7 @@ export class UserConfigService implements OnApplicationBootstrap {
 
     const collection = this.databaseService.getDb().collection('user_configs')
     await collection.updateOne(
-      { username },
+      { userId },
       {
         $set: {
           config,
@@ -269,35 +269,35 @@ export class UserConfigService implements OnApplicationBootstrap {
       { upsert: true },
     )
 
-    this.logger.log(`✅ ${service} config updated for user: ${username}`)
+    this.logger.log(`✅ ${service} config updated for userId: ${userId}`)
     return config
   }
 
   /**
    * 获取用户特定服务的配置（供各服务模块调用）
    */
-  async getUserSoraConfig(username: string) {
-    const config = await this.getUserConfig(username)
+  async getUserSoraConfig(userId: string) {
+    const config = await this.getUserConfig(userId)
     return config.sora
   }
 
-  async getUserVeoConfig(username: string) {
-    const config = await this.getUserConfig(username)
+  async getUserVeoConfig(userId: string) {
+    const config = await this.getUserConfig(userId)
     return config.veo
   }
 
-  async getUserGeminiImageConfig(username: string) {
-    const config = await this.getUserConfig(username)
+  async getUserGeminiImageConfig(userId: string) {
+    const config = await this.getUserConfig(userId)
     return config.geminiImage
   }
 
-  async getUserGrokConfig(username: string) {
-    const config = await this.getUserConfig(username)
+  async getUserGrokConfig(userId: string) {
+    const config = await this.getUserConfig(userId)
     return config.grok
   }
 
-  async getUserGrokImageConfig(username: string) {
-    const config = await this.getUserConfig(username)
+  async getUserGrokImageConfig(userId: string) {
+    const config = await this.getUserConfig(userId)
     return config.grokImage
   }
 
@@ -306,7 +306,7 @@ export class UserConfigService implements OnApplicationBootstrap {
    * 用户可选择同步哪些字段（server / key），以及同步到哪些服务
    */
   async syncDefaultToAll(
-    username: string,
+    userId: string,
     defaultServer: string,
     defaultKey: string,
     options?: {
@@ -315,7 +315,7 @@ export class UserConfigService implements OnApplicationBootstrap {
       services?: Array<'sora' | 'veo' | 'geminiImage' | 'grok' | 'grokImage'>
     },
   ): Promise<UserApiConfig> {
-    const config = await this.getUserConfig(username)
+    const config = await this.getUserConfig(userId)
     const syncServer = options?.syncServer !== false
     const syncKey = options?.syncKey !== false
     const services = options?.services || ['sora', 'veo', 'geminiImage', 'grok', 'grokImage']
@@ -343,7 +343,7 @@ export class UserConfigService implements OnApplicationBootstrap {
 
     const collection = this.databaseService.getDb().collection('user_configs')
     await collection.updateOne(
-      { username },
+      { userId },
       {
         $set: {
           config,
@@ -353,7 +353,7 @@ export class UserConfigService implements OnApplicationBootstrap {
       { upsert: true },
     )
 
-    this.logger.log(`✅ Default config synced to [${services.join(', ')}] for user: ${username}`)
+    this.logger.log(`✅ Default config synced to [${services.join(', ')}] for userId: ${userId}`)
     return config
   }
 

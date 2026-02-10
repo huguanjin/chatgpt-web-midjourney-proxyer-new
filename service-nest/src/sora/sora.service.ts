@@ -20,14 +20,14 @@ export class SoraService {
   /**
    * 获取用户级 Sora 配置（优先用户配置，回退全局配置）
    */
-  private async getUserSoraConfig(username: string) {
+  private async getUserSoraConfig(userId: string) {
     try {
-      const userConfig = await this.userConfigService.getUserConfig(username)
+      const userConfig = await this.userConfigService.getUserConfig(userId)
       if (userConfig.sora?.server) {
         return userConfig.sora
       }
     } catch (e) {
-      this.logger.warn(`⚠️ Failed to load user config for ${username}, using global`)
+      this.logger.warn(`⚠️ Failed to load user config for ${userId}, using global`)
     }
     return this.configService.getSoraConfig()
   }
@@ -50,8 +50,8 @@ export class SoraService {
   /**
    * 创建视频任务
    */
-  async createVideo(dto: CreateVideoDto, username: string): Promise<any> {
-    const config = await this.getUserSoraConfig(username)
+  async createVideo(dto: CreateVideoDto, userId: string): Promise<any> {
+    const config = await this.getUserSoraConfig(userId)
     const payload = {
       images: dto.images || [],
       model: dto.model || 'sora-2',
@@ -74,8 +74,8 @@ export class SoraService {
   /**
    * 查询视频任务状态
    */
-  async queryVideo(taskId: string, username: string): Promise<any> {
-    const config = await this.getUserSoraConfig(username)
+  async queryVideo(taskId: string, userId: string): Promise<any> {
+    const config = await this.getUserSoraConfig(userId)
     const url = `/v1/videos/${encodeURIComponent(taskId)}`
     
     this.logger.log(`📤 Sending query request for task: ${taskId}`)

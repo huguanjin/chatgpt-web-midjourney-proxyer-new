@@ -32,17 +32,18 @@ export class SoraController {
    */
   @Post('create')
   async createVideo(@Body() createVideoDto: CreateVideoDto, @Req() req: any) {
+    const userId = req.user.userId
     const username = req.user.username
     this.logger.log(`📹 Creating video with model: ${createVideoDto.model}`)
     this.logger.log(`📝 Prompt: ${createVideoDto.prompt}`)
 
     try {
-      const result = await this.soraService.createVideo(createVideoDto, username)
+      const result = await this.soraService.createVideo(createVideoDto, userId)
       this.logger.log(`✅ Video task created: ${result.id}`)
 
       // 记录任务到数据库
       try {
-        await this.videoTasksService.createTask(username, {
+        await this.videoTasksService.createTask(userId, {
           externalTaskId: result.id,
           platform: 'sora',
           model: createVideoDto.model || 'sora',
@@ -83,10 +84,10 @@ export class SoraController {
   @Get('query')
   async queryVideo(@Query() queryDto: QueryVideoDto, @Req() req: any) {
     this.logger.log(`🔍 Querying video task: ${queryDto.id}`)
-    const username = req?.user?.username || 'unknown'
+    const userId = req?.user?.userId || 'unknown'
 
     try {
-      const result = await this.soraService.queryVideo(queryDto.id, username)
+      const result = await this.soraService.queryVideo(queryDto.id, userId)
       this.logger.log(`📊 Task status: ${result.status}`)
 
       // 更新数据库中的任务状态

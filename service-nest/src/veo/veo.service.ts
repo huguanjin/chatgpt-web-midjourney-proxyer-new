@@ -21,14 +21,14 @@ export class VeoService {
   /**
    * 获取用户级 VEO 配置（优先用户配置，回退全局配置）
    */
-  private async getUserVeoConfig(username: string) {
+  private async getUserVeoConfig(userId: string) {
     try {
-      const userConfig = await this.userConfigService.getUserConfig(username)
+      const userConfig = await this.userConfigService.getUserConfig(userId)
       if (userConfig.veo?.server) {
         return userConfig.veo
       }
     } catch (e) {
-      this.logger.warn(`⚠️ Failed to load user config for ${username}, using global`)
+      this.logger.warn(`⚠️ Failed to load user config for ${userId}, using global`)
     }
     return this.configService.getVeoConfig()
   }
@@ -36,8 +36,8 @@ export class VeoService {
   /**
    * 创建 VEO 视频任务（支持参考图）
    */
-  async createVideo(dto: CreateVeoVideoDto, files?: Express.Multer.File[], username?: string): Promise<any> {
-    const config = await this.getUserVeoConfig(username || 'unknown')
+  async createVideo(dto: CreateVeoVideoDto, files?: Express.Multer.File[], userId?: string): Promise<any> {
+    const config = await this.getUserVeoConfig(userId || 'unknown')
     
     this.logger.log(`📤 Creating VEO video with model: ${dto.model}`)
     this.logger.log(`📝 Prompt: ${dto.prompt}`)
@@ -85,8 +85,8 @@ export class VeoService {
   /**
    * 查询 VEO 视频任务状态
    */
-  async queryVideo(taskId: string, username?: string): Promise<any> {
-    const config = await this.getUserVeoConfig(username || 'unknown')
+  async queryVideo(taskId: string, userId?: string): Promise<any> {
+    const config = await this.getUserVeoConfig(userId || 'unknown')
     
     this.logger.log(`📤 Querying VEO task: ${taskId}`)
 
