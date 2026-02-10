@@ -1,23 +1,41 @@
 import { Injectable, Logger } from '@nestjs/common'
 import axios from 'axios'
-import type { CreateVideoDto } from './dto/create-video.dto'
+import { CreateVideoDto } from './dto/create-video.dto'
 import { ConfigService } from '../config/config.service'
+import { UserConfigService } from '../user-config/user-config.service'
 
 @Injectable()
 export class SoraService {
   private readonly logger = new Logger(SoraService.name)
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly userConfigService: UserConfigService,
+  ) {
     const config = this.configService.getSoraConfig()
     this.logger.log(`🔧 Sora Server: ${config.server}`)
     this.logger.log(`🔑 Sora Key: ${config.key ? `****${config.key.slice(-8)}` : 'NOT SET'}`)
   }
 
   /**
-   * 创建 HTTP 客户端（每次使用最新配置）
+   * 获取用户级 Sora 配置（优先用户配置，回退全局配置）
    */
-  private createHttpClient() {
-    const config = this.configService.getSoraConfig()
+  private async getUserSoraConfig(username: string) {
+    try {
+      const userConfig = await this.userConfigService.getUserConfig(username)
+      if (userConfig.sora?.server) {
+        return userConfig.sora
+      }
+    } catch (e) {
+      this.logger.warn(`⚠️ Failed to load user config for ${username}, using global`)
+    }
+    return this.configService.getSoraConfig()
+  }
+
+  /**
+   * 创建 HTTP 客户端（使用指定配置）
+   */
+  private createHttpClientWithConfig(config: { server: string; key: string }) {
     return axios.create({
       baseURL: config.server,
       timeout: 60000,
@@ -32,8 +50,8 @@ export class SoraService {
   /**
    * 创建视频任务
    */
-  async createVideo(dto: CreateVideoDto): Promise<any> {
-    const config = this.configService.getSoraConfig()
+  async createVideo(dto: CreateVideoDto, username: string): Promise<any> {
+    const config = await this.getUserSoraConfig(username)
     const payload = {
       images: dto.images || [],
       model: dto.model || 'sora-2',
@@ -48,7 +66,7 @@ export class SoraService {
     this.logger.log(`📤 Sending create request to: ${config.server}/v1/video/create`)
     this.logger.log(`📦 Payload: ${JSON.stringify(payload, null, 2)}`)
 
-    const httpClient = this.createHttpClient()
+    const httpClient = this.createHttpClientWithConfig(config)
     const response = await httpClient.post('/v1/video/create', payload)
     return response.data
   }
@@ -56,15 +74,15 @@ export class SoraService {
   /**
    * 查询视频任务状态
    */
-  async queryVideo(taskId: string): Promise<any> {
-    const config = this.configService.getSoraConfig()
+  async queryVideo(taskId: string, username: string): Promise<any> {
+    const config = await this.getUserSoraConfig(username)
     const url = `/v1/videos/${encodeURIComponent(taskId)}`
     
     this.logger.log(`📤 Sending query request for task: ${taskId}`)
     this.logger.log(`🔗 Full URL: ${config.server}${url}`)
 
     try {
-      const httpClient = this.createHttpClient()
+      const httpClient = this.createHttpClientWithConfig(config)
       const response = await httpClient.get(url)
       return response.data
     } catch (error) {

@@ -241,7 +241,11 @@ const pollTaskStatus = async (taskId: string, taskPlatform: 'sora' | 'veo' | 'gr
 }
 
 // 恢复未完成任务的轮询
-onMounted(() => {
+onMounted(async () => {
+  // 先从数据库加载任务列表
+  await store.loadTasks()
+
+  // 恢复未完成任务的轮询
   store.tasks.forEach((task) => {
     if (task.status === 'queued' || task.status === 'processing')
       pollTaskStatus(task.id, task.platform)

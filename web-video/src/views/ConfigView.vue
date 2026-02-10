@@ -1,14 +1,28 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { configApi, type AppConfig, type ServiceConfig } from '@/api'
+import { userConfigApi, type UserApiConfig, type ServiceConfig } from '@/api'
 
 const isLoading = ref(false)
 const isSaving = ref(false)
+const isSyncing = ref(false)
 const message = ref('')
 const messageType = ref<'success' | 'error'>('success')
 
-// 配置数据
-const config = ref<AppConfig | null>(null)
+// 配置数据（用户级）
+const config = ref<UserApiConfig | null>(null)
+
+// 默认配置同步表单
+const defaultForm = ref({
+  server: '',
+  key: '',
+})
+const syncServices = ref({
+  sora: true,
+  veo: true,
+  geminiImage: true,
+  grok: true,
+  grokImage: true,
+})
 
 // 编辑模式
 const editMode = ref<{
@@ -16,11 +30,13 @@ const editMode = ref<{
   veo: boolean
   geminiImage: boolean
   grok: boolean
+  grokImage: boolean
 }>({
   sora: false,
   veo: false,
   geminiImage: false,
   grok: false,
+  grokImage: false,
 })
 
 // 编辑表单数据
@@ -29,11 +45,13 @@ const editForm = ref<{
   veo: ServiceConfig
   geminiImage: ServiceConfig
   grok: ServiceConfig
+  grokImage: ServiceConfig
 }>({
   sora: { server: '', key: '', characterServer: '', characterKey: '' },
   veo: { server: '', key: '' },
   geminiImage: { server: '', key: '' },
   grok: { server: '', key: '' },
+  grokImage: { server: '', key: '' },
 })
 
 // 显示消息
@@ -49,7 +67,7 @@ const showMessage = (msg: string, type: 'success' | 'error' = 'success') => {
 const loadConfig = async () => {
   isLoading.value = true
   try {
-    const response = await configApi.getConfig()
+    const response = await userConfigApi.getConfig()
     config.value = response.data.data
   } catch (error: any) {
     showMessage(error.message || '加载配置失败', 'error')
@@ -59,10 +77,10 @@ const loadConfig = async () => {
 }
 
 // 进入编辑模式
-const enterEditMode = async (service: 'sora' | 'veo' | 'geminiImage' | 'grok') => {
+const enterEditMode = async (service: 'sora' | 'veo' | 'geminiImage' | 'grok' | 'grokImage') => {
   // 获取完整配置（包含 API Key）
   try {
-    const response = await configApi.getFullConfig()
+    const response = await userConfigApi.getFullConfig()
     const fullConfig = response.data.data
     
     if (service === 'sora') {
@@ -73,6 +91,8 @@ const enterEditMode = async (service: 'sora' | 'veo' | 'geminiImage' | 'grok') =
       editForm.value.geminiImage = { ...fullConfig.geminiImage }
     } else if (service === 'grok') {
       editForm.value.grok = { ...fullConfig.grok }
+    } else if (service === 'grokImage') {
+      editForm.value.grokImage = { ...fullConfig.grokImage }
     }
     
     editMode.value[service] = true
@@ -82,16 +102,16 @@ const enterEditMode = async (service: 'sora' | 'veo' | 'geminiImage' | 'grok') =
 }
 
 // 取消编辑
-const cancelEdit = (service: 'sora' | 'veo' | 'geminiImage' | 'grok') => {
+const cancelEdit = (service: 'sora' | 'veo' | 'geminiImage' | 'grok' | 'grokImage') => {
   editMode.value[service] = false
 }
 
 // 保存配置
-const saveConfig = async (service: 'sora' | 'veo' | 'geminiImage' | 'grok') => {
+const saveConfig = async (service: 'sora' | 'veo' | 'geminiImage' | 'grok' | 'grokImage') => {
   isSaving.value = true
   try {
     const serviceConfig = editForm.value[service]
-    await configApi.updateServiceConfig(service, serviceConfig)
+    await userConfigApi.updateServiceConfig(service, serviceConfig)
     
     // 重新加载配置
     await loadConfig()
@@ -112,17 +132,50 @@ const getServiceName = (service: string): string => {
     veo: 'VEO',
     geminiImage: 'Gemini Image',
     grok: 'Grok',
+    grokImage: 'Grok 生图',
   }
   return names[service] || service
 }
 
 // 测试连接
-const testConnection = async (service: 'sora' | 'veo' | 'geminiImage' | 'grok') => {
+const testConnection = async (service: 'sora' | 'veo' | 'geminiImage' | 'grok' | 'grokImage') => {
   showMessage(`正在测试 ${getServiceName(service)} 连接...`, 'success')
   // TODO: 实现连接测试
   setTimeout(() => {
     showMessage(`${getServiceName(service)} 连接测试功能开发中`, 'success')
   }, 1000)
+}
+
+// 同步默认配置到所有服务
+const syncDefault = async () => {
+  if (!defaultForm.value.server && !defaultForm.value.key) {
+    showMessage('请至少填写 API 地址或 API Key', 'error')
+    return
+  }
+
+  const selectedServices = Object.entries(syncServices.value)
+    .filter(([_, checked]) => checked)
+    .map(([service]) => service)
+
+  if (selectedServices.length === 0) {
+    showMessage('请至少选择一个要同步的服务', 'error')
+    return
+  }
+
+  isSyncing.value = true
+  try {
+    const res = await userConfigApi.syncDefault(
+      defaultForm.value.server,
+      defaultForm.value.key,
+      selectedServices,
+    )
+    await loadConfig()
+    showMessage(res.data.message || '同步成功！配置已更新', 'success')
+  } catch (error: any) {
+    showMessage(error.response?.data?.message || error.message || '同步失败', 'error')
+  } finally {
+    isSyncing.value = false
+  }
 }
 
 onMounted(() => {
@@ -132,7 +185,7 @@ onMounted(() => {
 
 <template>
   <div class="config-page">
-    <h1>⚙️ 系统配置</h1>
+    <h1>⚙️ 我的 API 配置</h1>
     
     <!-- 消息提示 -->
     <div v-if="message" :class="['message', messageType]">
@@ -145,6 +198,51 @@ onMounted(() => {
     </div>
 
     <div v-else-if="config" class="config-sections">
+      <!-- 默认配置快捷同步 -->
+      <div class="config-section sync-section">
+        <div class="section-header">
+          <h2>🔗 快捷配置同步</h2>
+        </div>
+        <p class="sync-desc">
+          如果您的 API 服务商使用同一个地址和密钥即可调用所有模型，可在此统一设置后一键同步到下方所有服务配置，同步后仍可单独修改任意一项。
+        </p>
+        <div class="config-edit">
+          <div class="form-group">
+            <label>默认 API 地址</label>
+            <input v-model="defaultForm.server" type="text" placeholder="https://api.example.com" />
+          </div>
+          <div class="form-group">
+            <label>默认 API Key</label>
+            <input v-model="defaultForm.key" type="text" placeholder="sk-..." />
+          </div>
+          <div class="form-group">
+            <label>同步到以下服务</label>
+            <div class="sync-checkboxes">
+              <label class="checkbox-label">
+                <input v-model="syncServices.sora" type="checkbox" /> Sora
+              </label>
+              <label class="checkbox-label">
+                <input v-model="syncServices.veo" type="checkbox" /> VEO
+              </label>
+              <label class="checkbox-label">
+                <input v-model="syncServices.geminiImage" type="checkbox" /> Gemini Image
+              </label>
+              <label class="checkbox-label">
+                <input v-model="syncServices.grok" type="checkbox" /> Grok 视频
+              </label>
+              <label class="checkbox-label">
+                <input v-model="syncServices.grokImage" type="checkbox" /> Grok 生图
+              </label>
+            </div>
+          </div>
+          <div class="button-group">
+            <button class="save-btn sync-btn" :disabled="isSyncing" @click="syncDefault">
+              {{ isSyncing ? '同步中...' : '🔄 一键同步到所选服务' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Sora 配置 -->
       <div class="config-section">
         <div class="section-header">
@@ -329,13 +427,56 @@ onMounted(() => {
         </div>
       </div>
 
+      <!-- Grok 图片生成配置 -->
+      <div class="config-section">
+        <div class="section-header">
+          <h2>🎨 Grok 图片生成</h2>
+          <button 
+            v-if="!editMode.grokImage" 
+            class="edit-btn"
+            @click="enterEditMode('grokImage')"
+          >
+            ✏️ 编辑
+          </button>
+        </div>
+        
+        <div v-if="!editMode.grokImage" class="config-display">
+          <div class="config-item">
+            <label>API 地址</label>
+            <span class="value">{{ config.grokImage?.server || '(未设置)' }}</span>
+          </div>
+          <div class="config-item">
+            <label>API Key</label>
+            <span class="value masked">{{ config.grokImage?.key || '(未设置)' }}</span>
+          </div>
+        </div>
+
+        <div v-else class="config-edit">
+          <div class="form-group">
+            <label>API 地址</label>
+            <input v-model="editForm.grokImage.server" type="text" placeholder="https://..." />
+          </div>
+          <div class="form-group">
+            <label>API Key</label>
+            <input v-model="editForm.grokImage.key" type="text" placeholder="sk-..." />
+          </div>
+          <div class="button-group">
+            <button class="save-btn" :disabled="isSaving" @click="saveConfig('grokImage')">
+              {{ isSaving ? '保存中...' : '💾 保存' }}
+            </button>
+            <button class="cancel-btn" @click="cancelEdit('grokImage')">取消</button>
+          </div>
+        </div>
+      </div>
+
       <!-- 说明 -->
       <div class="info-section">
         <h3>📝 说明</h3>
         <ul>
-          <li>配置修改后<strong>立即生效</strong>，无需重启后端服务</li>
+          <li>每个用户拥有独立的 API 配置，修改后<strong>立即生效</strong></li>
           <li>API Key 以脱敏方式显示，编辑时可查看完整内容</li>
-          <li>配置保存在 <code>config.json</code> 文件中</li>
+          <li>新用户的配置自动从模板初始化，配置存储在 MongoDB 中</li>
+          <li><strong>快捷同步：</strong>如果 API 服务商共用地址和密钥，可使用顶部「快捷配置同步」一键填充，同步后仍可单独修改</li>
         </ul>
       </div>
     </div>
@@ -556,6 +697,47 @@ h1 {
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 13px;
+}
+
+.sync-section {
+  border: 2px dashed #667eea;
+  background: linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%);
+}
+
+.sync-desc {
+  color: #666;
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0 0 16px;
+}
+
+.sync-checkboxes {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: #444;
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #667eea;
+  cursor: pointer;
+}
+
+.sync-btn {
+  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%) !important;
+  color: #1a1a2e !important;
+  font-weight: 600 !important;
 }
 
 @media (max-width: 600px) {

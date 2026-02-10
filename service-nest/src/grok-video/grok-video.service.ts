@@ -3,23 +3,42 @@ import axios from 'axios'
 import * as FormData from 'form-data'
 import { CreateGrokVideoDto } from './dto/create-grok-video.dto'
 import { ConfigService } from '../config/config.service'
+import { UserConfigService } from '../user-config/user-config.service'
 
 @Injectable()
 export class GrokVideoService {
   private readonly logger = new Logger(GrokVideoService.name)
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly userConfigService: UserConfigService,
+  ) {
     const config = this.configService.getGrokConfig()
     this.logger.log(`🔧 Grok Server: ${config.server}`)
     this.logger.log(`🔑 Grok Key: ${config.key ? `****${config.key.slice(-8)}` : 'NOT SET'}`)
   }
 
   /**
+   * 获取用户级 Grok 配置（优先用户配置，回退全局配置）
+   */
+  private async getUserGrokConfig(username: string) {
+    try {
+      const userConfig = await this.userConfigService.getUserConfig(username)
+      if (userConfig.grok?.server) {
+        return userConfig.grok
+      }
+    } catch (e) {
+      this.logger.warn(`⚠️ Failed to load user config for ${username}, using global`)
+    }
+    return this.configService.getGrokConfig()
+  }
+
+  /**
    * 创建 Grok 视频任务（支持参考图）
    * API: POST /v1/videos (multipart/form-data)
    */
-  async createVideo(dto: CreateGrokVideoDto, files?: Express.Multer.File[]): Promise<any> {
-    const config = this.configService.getGrokConfig()
+  async createVideo(dto: CreateGrokVideoDto, files?: Express.Multer.File[], username?: string): Promise<any> {
+    const config = await this.getUserGrokConfig(username || 'unknown')
 
     this.logger.log(`📤 Creating Grok video with model: ${dto.model}`)
     this.logger.log(`📝 Prompt: ${dto.prompt}`)
@@ -72,8 +91,8 @@ export class GrokVideoService {
    * 查询 Grok 视频任务状态
    * API: GET /v1/videos/{taskId}
    */
-  async queryVideo(taskId: string): Promise<any> {
-    const config = this.configService.getGrokConfig()
+  async queryVideo(taskId: string, username?: string): Promise<any> {
+    const config = await this.getUserGrokConfig(username || 'unknown')
 
     this.logger.log(`📤 Querying Grok task: ${taskId}`)
 

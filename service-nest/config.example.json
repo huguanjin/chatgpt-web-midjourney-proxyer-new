@@ -17,5 +17,9 @@
   "grok": {
     "server": "https://your-grok-api-server.com",
     "key": "your-grok-api-key"
+  },
+  "grokImage": {
+    "server": "https://your-grok-image-api-server.com",
+    "key": "your-grok-image-api-key"
   }
 }

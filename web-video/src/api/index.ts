@@ -13,10 +13,56 @@ const api = axios.create({
 
 // 调试：打印请求
 api.interceptors.request.use((config) => {
+  // 自动附加 JWT token
+  const token = localStorage.getItem('auth_token')
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
   console.log('📤 API Request:', config.method?.toUpperCase(), config.url)
   console.log('📦 Request Data:', config.data)
   return config
 })
+
+// 响应拦截器：处理 401 自动跳转登录
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // 如果不是登录接口返回的 401，则清除 token 并跳转
+      const url = error.config?.url || ''
+      if (!url.includes('/v1/auth/login')) {
+        localStorage.removeItem('auth_token')
+        localStorage.removeItem('auth_username')
+        localStorage.removeItem('auth_role')
+        window.location.href = '/login'
+      }
+    }
+    return Promise.reject(error)
+  },
+)
+
+// ============ Auth API ============
+
+export const authApi = {
+  // 登录
+  login: (username: string, password: string) =>
+    api.post<{ status: string; data: { token: string; username: string; role: string } }>(
+      '/v1/auth/login',
+      { username, password },
+    ),
+
+  // 获取用户信息
+  getProfile: () =>
+    api.get('/v1/auth/profile'),
+
+  // 修改密码
+  changePassword: (oldPassword: string, newPassword: string) =>
+    api.put('/v1/auth/password', { oldPassword, newPassword }),
+
+  // 验证 token
+  verify: () =>
+    api.get('/v1/auth/verify'),
+}
 
 // ============ Sora API ============
 
@@ -131,8 +177,11 @@ export const grokApi = {
 export interface CreateGeminiImageParams {
   model?: string
   prompt: string
-  aspectRatio?: '1:1' | '16:9' | '9:16' | '4:3' | '3:4'
-  imageSize?: '1K' | '2K' | '4K'
+  aspectRatio?: string
+  imageSize?: string
+  // Grok/GPT 图片模型参数
+  size?: string
+  n?: number
 }
 
 export interface GeminiImageResult {
@@ -144,7 +193,8 @@ export interface GeminiImageResult {
   imageSize?: string
   images?: Array<{
     mimeType: string
-    data: string
+    url?: string
+    data?: string
   }>
   error?: string
   createdAt?: number
@@ -160,6 +210,8 @@ export const geminiImageApi = {
       if (params.model) formData.append('model', params.model)
       if (params.aspectRatio) formData.append('aspectRatio', params.aspectRatio)
       if (params.imageSize) formData.append('imageSize', params.imageSize)
+      if (params.size) formData.append('size', params.size)
+      if (params.n) formData.append('n', String(params.n))
       
       for (const file of files) {
         formData.append('reference_images', file)
@@ -185,6 +237,8 @@ export const geminiImageApi = {
       if (params.model) formData.append('model', params.model)
       if (params.aspectRatio) formData.append('aspectRatio', params.aspectRatio)
       if (params.imageSize) formData.append('imageSize', params.imageSize)
+      if (params.size) formData.append('size', params.size)
+      if (params.n) formData.append('n', String(params.n))
       
       for (const file of files) {
         formData.append('reference_images', file)
@@ -209,7 +263,7 @@ export const geminiImageApi = {
     api.get<GeminiImageResult>(`/v1/image/query?id=${encodeURIComponent(id)}`),
 }
 
-// ============ Config API ============
+// ============ Config API (全局配置，管理员用) ============
 
 export interface ServiceConfig {
   server: string
@@ -224,6 +278,7 @@ export interface AppConfig {
   veo: ServiceConfig
   geminiImage: ServiceConfig
   grok: ServiceConfig
+  grokImage: ServiceConfig
 }
 
 export const configApi = {
@@ -240,8 +295,71 @@ export const configApi = {
     api.put<{ status: string; message: string; data: AppConfig }>('/v1/config', config),
 
   // 更新单个服务配置
-  updateServiceConfig: (service: 'sora' | 'veo' | 'geminiImage' | 'grok', config: Partial<ServiceConfig>) =>
+  updateServiceConfig: (service: 'sora' | 'veo' | 'geminiImage' | 'grok' | 'grokImage', config: Partial<ServiceConfig>) =>
     api.put<{ status: string; message: string; data: AppConfig }>(`/v1/config/${service}`, config),
+}
+
+// ============ User Config API (用户级配置) ============
+
+export interface UserApiConfig {
+  sora: ServiceConfig
+  veo: ServiceConfig
+  geminiImage: ServiceConfig
+  grok: ServiceConfig
+  grokImage: ServiceConfig
+}
+
+export const userConfigApi = {
+  // 获取当前用户配置（隐藏敏感信息）
+  getConfig: () =>
+    api.get<{ status: string; data: UserApiConfig }>('/v1/user-config'),
+
+  // 获取当前用户完整配置（包含 API Key）
+  getFullConfig: () =>
+    api.get<{ status: string; data: UserApiConfig }>('/v1/user-config/full'),
+
+  // 更新用户单个服务配置
+  updateServiceConfig: (service: 'sora' | 'veo' | 'geminiImage' | 'grok' | 'grokImage', config: Partial<ServiceConfig>) =>
+    api.put<{ status: string; message: string; data: UserApiConfig }>(`/v1/user-config/${service}`, config),
+
+  // 同步默认配置到所有服务
+  syncDefault: (server: string, key: string, services?: string[]) =>
+    api.put<{ status: string; message: string; data: UserApiConfig }>('/v1/user-config/sync-default', { server, key, services }),
+}
+
+// ============ Video Tasks API (视频任务记录) ============
+
+export interface VideoTaskRecord {
+  externalTaskId: string
+  username: string
+  platform: 'sora' | 'veo' | 'grok'
+  model: string
+  prompt: string
+  params?: Record<string, any>
+  status: 'queued' | 'processing' | 'completed' | 'failed'
+  progress: number
+  video_url?: string
+  thumbnail_url?: string
+  error?: string
+  createdAt: number
+  updatedAt: number
+}
+
+export const videoTasksApi = {
+  // 获取当前用户的任务列表
+  getTasks: (params?: { platform?: string; status?: string; page?: number; limit?: number }) =>
+    api.get<{ status: string; data: VideoTaskRecord[]; total: number; page: number; limit: number }>(
+      '/v1/tasks',
+      { params },
+    ),
+
+  // 删除某个任务
+  deleteTask: (externalTaskId: string) =>
+    api.delete<{ status: string; message: string }>(`/v1/tasks/${encodeURIComponent(externalTaskId)}`),
+
+  // 清除所有已完成的任务
+  clearCompleted: () =>
+    api.delete<{ status: string; message: string; deletedCount: number }>('/v1/tasks/completed/clear'),
 }
 
 export default api

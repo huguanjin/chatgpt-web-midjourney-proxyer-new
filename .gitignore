@@ -35,3 +35,5 @@ coverage
 # Config files with sensitive data
 /service-nest/.env
 /service-nest/config.json
+/service-nest/mongo_config.yaml
+/service-nest/initial_admin_credentials.txt

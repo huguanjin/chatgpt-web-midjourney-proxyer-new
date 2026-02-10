@@ -6,8 +6,17 @@ const isLoading = ref(false)
 const imageForm = ref({
   model: 'gemini-3-pro-image-preview',
   prompt: '',
-  aspectRatio: '1:1' as '1:1' | '16:9' | '9:16' | '4:3' | '3:4',
-  imageSize: '1K' as '1K' | '2K' | '4K',
+  aspectRatio: '1:1' as string,
+  imageSize: '1K' as string,
+  // Grok/GPT 模型参数
+  size: '1024x1024' as string,
+  n: 1,
+})
+
+// 判断当前模型是否为 Grok/GPT 图片模型
+const isGrokModel = computed(() => {
+  const m = imageForm.value.model
+  return (m.startsWith('grok-') && m.includes('image')) || m.startsWith('gpt-image')
 })
 
 // 自定义模型输入
@@ -17,8 +26,8 @@ const modelCustom = ref(false)
 const referenceFiles = ref<File[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
 
-// 生成的图片结果
-const generatedImages = ref<Array<{ mimeType: string; data: string }>>([])
+// 生成的图片结果（url: 后端文件路径，data: 兼容旧格式 Base64）
+const generatedImages = ref<Array<{ mimeType: string; url?: string; data?: string }>>([])
 const currentTaskId = ref<string | null>(null)
 const taskStatus = ref<string>('')
 const errorMessage = ref<string>('')
@@ -29,7 +38,7 @@ interface ImageHistory {
   prompt: string
   aspectRatio: string
   imageSize: string
-  images: Array<{ mimeType: string; data: string }>
+  images: Array<{ mimeType: string; url?: string; data?: string }>
   createdAt: number
 }
 const imageHistory = ref<ImageHistory[]>([])
@@ -85,13 +94,19 @@ const generateImage = async () => {
   taskStatus.value = '生成中...'
 
   try {
+    const params: any = {
+      model: imageForm.value.model,
+      prompt: imageForm.value.prompt,
+    }
+    if (isGrokModel.value) {
+      params.size = imageForm.value.size
+      params.n = imageForm.value.n
+    } else {
+      params.aspectRatio = imageForm.value.aspectRatio
+      params.imageSize = imageForm.value.imageSize
+    }
     const response = await geminiImageApi.generateImage(
-      {
-        model: imageForm.value.model,
-        prompt: imageForm.value.prompt,
-        aspectRatio: imageForm.value.aspectRatio,
-        imageSize: imageForm.value.imageSize,
-      },
+      params,
       referenceFiles.value.length > 0 ? referenceFiles.value : undefined,
     )
 
@@ -146,13 +161,19 @@ const createImageTask = async () => {
   taskStatus.value = '任务创建中...'
 
   try {
+    const createParams: any = {
+      model: imageForm.value.model,
+      prompt: imageForm.value.prompt,
+    }
+    if (isGrokModel.value) {
+      createParams.size = imageForm.value.size
+      createParams.n = imageForm.value.n
+    } else {
+      createParams.aspectRatio = imageForm.value.aspectRatio
+      createParams.imageSize = imageForm.value.imageSize
+    }
     const response = await geminiImageApi.createImage(
-      {
-        model: imageForm.value.model,
-        prompt: imageForm.value.prompt,
-        aspectRatio: imageForm.value.aspectRatio,
-        imageSize: imageForm.value.imageSize,
-      },
+      createParams,
       referenceFiles.value.length > 0 ? referenceFiles.value : undefined,
     )
 
@@ -235,11 +256,11 @@ const pollTaskStatus = async (taskId: string) => {
 }
 
 // 下载图片 - 支持多种格式
-const downloadImage = (image: { mimeType: string; data: string }, index: number, format: 'original' | 'jpg' | 'png' = 'original') => {
+const downloadImage = (image: { mimeType: string; url?: string; data?: string }, index: number, format: 'original' | 'jpg' | 'png' = 'original') => {
   if (format === 'original') {
     // 原始格式直接下载
     const link = document.createElement('a')
-    link.href = `data:${image.mimeType};base64,${image.data}`
+    link.href = getImageSrc(image)
     const ext = image.mimeType.split('/')[1] || 'png'
     link.download = `gemini-image-${Date.now()}-${index}.${ext}`
     link.click()
@@ -250,8 +271,9 @@ const downloadImage = (image: { mimeType: string; data: string }, index: number,
 }
 
 // 转换图片格式并下载
-const convertAndDownload = (image: { mimeType: string; data: string }, index: number, format: 'jpg' | 'png') => {
+const convertAndDownload = (image: { mimeType: string; url?: string; data?: string }, index: number, format: 'jpg' | 'png') => {
   const img = new Image()
+  img.crossOrigin = 'anonymous'
   img.onload = () => {
     const canvas = document.createElement('canvas')
     canvas.width = img.width
@@ -280,7 +302,7 @@ const convertAndDownload = (image: { mimeType: string; data: string }, index: nu
       }
     }, mimeType, quality)
   }
-  img.src = `data:${image.mimeType};base64,${image.data}`
+  img.src = getImageSrc(image)
 }
 
 // 下载格式选择状态
@@ -320,15 +342,20 @@ const formatTime = (timestamp: number) => {
   return new Date(timestamp).toLocaleString()
 }
 
-// 获取图片 src
-const getImageSrc = (image: { mimeType: string; data: string }) => {
+// 获取图片 src - 支持 URL（文件存储）和 Base64（旧兼容）
+const getImageSrc = (image: { mimeType: string; url?: string; data?: string }) => {
+  if (image.url) {
+    // 文件存储模式：返回后端 URL
+    return `http://localhost:3003${image.url}`
+  }
+  // 旧 Base64 模式兼容
   return `data:${image.mimeType};base64,${image.data}`
 }
 </script>
 
 <template>
   <div class="image-generator">
-    <h1>🎨 Gemini 图片创作</h1>
+    <h1>🎨 AI 图片创作</h1>
 
     <div class="main-content">
       <!-- 左侧：表单 -->
@@ -337,8 +364,16 @@ const getImageSrc = (image: { mimeType: string; data: string }) => {
           <label>模型</label>
           <div class="model-select">
             <select v-if="!modelCustom" v-model="imageForm.model">
-              <option value="gemini-3-pro-image-preview">gemini-3-pro-image-preview</option>
-              <option value="gemini-2.0-flash-exp-image-generation">gemini-2.0-flash-exp</option>
+              <optgroup label="Gemini">
+                <option value="gemini-3-pro-image-preview">gemini-3-pro-image-preview</option>
+                <option value="gemini-2.0-flash-exp-image-generation">gemini-2.0-flash-exp</option>
+              </optgroup>
+              <optgroup label="Grok">
+                <option value="grok-4-1-image">grok-4-1-image</option>
+              </optgroup>
+              <optgroup label="GPT">
+                <option value="gpt-image-1.5">gpt-image-1.5</option>
+              </optgroup>
             </select>
             <input
               v-else
@@ -361,7 +396,8 @@ const getImageSrc = (image: { mimeType: string; data: string }) => {
           ></textarea>
         </div>
 
-        <div class="form-row">
+        <!-- Gemini 模型参数 -->
+        <div v-if="!isGrokModel" class="form-row">
           <div class="form-group">
             <label>宽高比</label>
             <select v-model="imageForm.aspectRatio">
@@ -379,6 +415,28 @@ const getImageSrc = (image: { mimeType: string; data: string }) => {
               <option value="1K">1K (标准)</option>
               <option value="2K">2K (高清)</option>
               <option value="4K">4K (超清)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Grok/GPT 模型参数 -->
+        <div v-else class="form-row">
+          <div class="form-group">
+            <label>图片尺寸</label>
+            <select v-model="imageForm.size">
+              <option value="1024x1024">1024×1024 (正方形)</option>
+              <option value="1536x1024">1536×1024 (横屏)</option>
+              <option value="1024x1536">1024×1536 (竖屏)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>生成数量</label>
+            <select v-model.number="imageForm.n">
+              <option :value="1">1 张</option>
+              <option :value="2">2 张</option>
+              <option :value="3">3 张</option>
+              <option :value="4">4 张</option>
             </select>
           </div>
         </div>

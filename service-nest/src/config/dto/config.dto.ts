@@ -49,6 +49,16 @@ export class GrokConfigDto {
   key?: string
 }
 
+export class GrokImageConfigDto {
+  @IsOptional()
+  @IsString()
+  server?: string
+
+  @IsOptional()
+  @IsString()
+  key?: string
+}
+
 export class UpdateConfigDto {
   @IsOptional()
   @IsNumber()
@@ -73,6 +83,11 @@ export class UpdateConfigDto {
   @ValidateNested()
   @Type(() => GrokConfigDto)
   grok?: GrokConfigDto
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => GrokImageConfigDto)
+  grokImage?: GrokImageConfigDto
 }
 
 export class UpdateServiceConfigDto {

@@ -36,10 +36,10 @@ export class ConfigController {
    * 更新全部配置
    */
   @Put()
-  updateConfig(@Body() updateConfigDto: UpdateConfigDto) {
+  async updateConfig(@Body() updateConfigDto: UpdateConfigDto) {
     this.logger.log('📝 Update config request')
     try {
-      const config = this.configService.updateConfig(updateConfigDto as any)
+      const config = await this.configService.updateConfig(updateConfigDto as any)
       return {
         status: 'success',
         message: 'Configuration updated successfully',
@@ -57,22 +57,22 @@ export class ConfigController {
    * 更新单个服务配置
    */
   @Put(':service')
-  updateServiceConfig(
+  async updateServiceConfig(
     @Param('service') service: string,
     @Body() dto: UpdateServiceConfigDto,
   ) {
     this.logger.log(`📝 Update ${service} config request`)
     
-    if (!['sora', 'veo', 'geminiImage', 'grok'].includes(service)) {
+    if (!['sora', 'veo', 'geminiImage', 'grok', 'grokImage'].includes(service)) {
       return {
         status: 'error',
-        message: `Invalid service: ${service}. Valid services are: sora, veo, geminiImage, grok`,
+        message: `Invalid service: ${service}. Valid services are: sora, veo, geminiImage, grok, grokImage`,
       }
     }
 
     try {
-      this.configService.updateServiceConfig(
-        service as 'sora' | 'veo' | 'geminiImage' | 'grok',
+      await this.configService.updateServiceConfig(
+        service as 'sora' | 'veo' | 'geminiImage' | 'grok' | 'grokImage',
         dto,
       )
       return {

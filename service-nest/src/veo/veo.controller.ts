@@ -7,19 +7,27 @@ import {
   Logger,
   Post,
   Query,
+  Req,
   UploadedFiles,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common'
 import { FilesInterceptor } from '@nestjs/platform-express'
 import { VeoService } from './veo.service'
 import { CreateVeoVideoDto } from './dto/create-veo-video.dto'
 import { QueryVeoVideoDto } from './dto/query-veo-video.dto'
+import { JwtAuthGuard } from '../auth/jwt-auth.guard'
+import { VideoTasksService } from '../video-tasks/video-tasks.service'
 
 @Controller('v1/veo')
+@UseGuards(JwtAuthGuard)
 export class VeoController {
   private readonly logger = new Logger(VeoController.name)
 
-  constructor(private readonly veoService: VeoService) {}
+  constructor(
+    private readonly veoService: VeoService,
+    private readonly videoTasksService: VideoTasksService,
+  ) {}
 
   /**
    * 创建 VEO 视频
@@ -31,7 +39,9 @@ export class VeoController {
   async createVideo(
     @Body() createVideoDto: CreateVeoVideoDto,
     @UploadedFiles() files?: Express.Multer.File[],
+    @Req() req?: any,
   ) {
+    const username = req?.user?.username || 'unknown'
     this.logger.log(`📹 Creating VEO video with model: ${createVideoDto.model}`)
     this.logger.log(`📝 Prompt: ${createVideoDto.prompt}`)
     if (files && files.length > 0) {
@@ -39,12 +49,34 @@ export class VeoController {
     }
 
     try {
-      const result = await this.veoService.createVideo(createVideoDto, files)
+      const result = await this.veoService.createVideo(createVideoDto, files, username)
       this.logger.log(`✅ VEO video task created: ${result.id}`)
+
+      // 记录任务到数据库
+      try {
+        await this.videoTasksService.createTask(username, {
+          externalTaskId: result.id,
+          platform: 'veo',
+          model: createVideoDto.model || 'veo',
+          prompt: createVideoDto.prompt,
+          params: {
+            size: createVideoDto.size,
+            seconds: createVideoDto.seconds,
+            hasReferenceImages: files && files.length > 0,
+          },
+          apiResponse: result,
+        })
+      } catch (dbErr) {
+        this.logger.warn(`⚠️ Failed to save VEO task to DB: ${dbErr.message}`)
+      }
+
       return result
     }
     catch (error) {
       this.logger.error(`❌ Failed to create VEO video: ${error.message}`)
+      if (error.response?.data) {
+        this.logger.error(`📋 API Response: ${JSON.stringify(error.response.data)}`)
+      }
       throw new HttpException(
         {
           status: 'error',
@@ -61,12 +93,33 @@ export class VeoController {
    * GET /v1/veo/query?id=xxx
    */
   @Get('query')
-  async queryVideo(@Query() queryDto: QueryVeoVideoDto) {
+  async queryVideo(@Query() queryDto: QueryVeoVideoDto, @Req() req?: any) {
     this.logger.log(`🔍 Querying VEO video task: ${queryDto.id}`)
+    const username = req?.user?.username || 'unknown'
 
     try {
-      const result = await this.veoService.queryVideo(queryDto.id)
+      const result = await this.veoService.queryVideo(queryDto.id, username)
       this.logger.log(`📊 VEO task status: ${result.status}`)
+
+      // 更新数据库中的任务状态
+      try {
+        const updates: any = { lastQueryResponse: result }
+        if (result.status === 'completed' || result.status === 'complete') {
+          updates.status = 'completed'
+          updates.progress = 100
+          updates.video_url = result.video_url || result.output?.video_url
+        } else if (result.status === 'processing' || result.status === 'in_progress') {
+          updates.status = 'processing'
+          updates.progress = result.progress || 50
+        } else if (result.status === 'failed' || result.status === 'error') {
+          updates.status = 'failed'
+          updates.error = result.error || result.message
+        }
+        await this.videoTasksService.updateTaskByExternalId(queryDto.id, updates)
+      } catch (dbErr) {
+        this.logger.warn(`⚠️ Failed to update VEO task in DB: ${dbErr.message}`)
+      }
+
       return result
     }
     catch (error) {

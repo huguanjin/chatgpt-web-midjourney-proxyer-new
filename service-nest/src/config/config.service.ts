@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common'
+import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common'
 import * as fs from 'fs'
 import * as path from 'path'
+import { DatabaseService } from '../database/database.service'
 
 export interface AppConfig {
   port: number
@@ -22,24 +23,65 @@ export interface AppConfig {
     server: string
     key: string
   }
+  grokImage: {
+    server: string
+    key: string
+  }
 }
 
 @Injectable()
-export class ConfigService {
+export class ConfigService implements OnApplicationBootstrap {
   private readonly logger = new Logger(ConfigService.name)
-  private readonly configPath: string
   private config: AppConfig
+  private readonly configPath: string
 
-  constructor() {
+  constructor(private readonly databaseService: DatabaseService) {
     this.configPath = path.join(process.cwd(), 'config.json')
-    this.config = this.loadConfig()
-    this.logger.log('✅ Config service initialized')
+    // 先用本地文件/默认值初始化，onModuleInit 中再从 MongoDB 加载
+    this.config = this.loadConfigFromFile()
+    this.logger.log('✅ Config service initialized (file fallback)')
   }
 
   /**
-   * 从文件加载配置
+   * 模块初始化时从 MongoDB 加载配置
    */
-  private loadConfig(): AppConfig {
+  async onApplicationBootstrap() {
+    try {
+      const collection = this.databaseService.getDb().collection('config')
+      const doc = await collection.findOne({ key: 'app_config' }) as any
+
+      if (doc) {
+        // 将 MongoDB 配置与默认配置合并，确保新增字段不会缺失
+        const defaults = this.getDefaultConfig()
+        const stored = doc.value || {}
+        this.config = {
+          port: stored.port ?? defaults.port,
+          sora: { ...defaults.sora, ...stored.sora },
+          veo: { ...defaults.veo, ...stored.veo },
+          geminiImage: { ...defaults.geminiImage, ...stored.geminiImage },
+          grok: { ...defaults.grok, ...stored.grok },
+          grokImage: { ...defaults.grokImage, ...stored.grokImage },
+        }
+        this.logger.log('✅ Config loaded from MongoDB')
+      } else {
+        // MongoDB 中无配置，将当前配置（从文件/默认值）写入 MongoDB 作为种子数据
+        await collection.insertOne({
+          key: 'app_config',
+          value: this.config,
+          updatedAt: new Date(),
+        } as any)
+        this.logger.log('📝 Seed config written to MongoDB from file/defaults')
+      }
+    } catch (error) {
+      this.logger.error(`❌ Failed to load config from MongoDB: ${error.message}`)
+      this.logger.warn('⚠️ Falling back to file-based config')
+    }
+  }
+
+  /**
+   * 从文件加载配置（仅作初始化回退用）
+   */
+  private loadConfigFromFile(): AppConfig {
     try {
       if (fs.existsSync(this.configPath)) {
         const content = fs.readFileSync(this.configPath, 'utf-8')
@@ -48,10 +90,8 @@ export class ConfigService {
         return config
       }
     } catch (error) {
-      this.logger.error(`❌ Failed to load config: ${error}`)
+      this.logger.error(`❌ Failed to load config file: ${error}`)
     }
-
-    // 返回默认配置（从环境变量）
     return this.getDefaultConfig()
   }
 
@@ -79,15 +119,42 @@ export class ConfigService {
         server: process.env.GROK_SERVER || '',
         key: process.env.GROK_KEY || '',
       },
+      grokImage: {
+        server: process.env.GROK_IMAGE_SERVER || '',
+        key: process.env.GROK_IMAGE_KEY || '',
+      },
     }
   }
 
   /**
-   * 获取完整配置（实时从文件读取）
+   * 获取完整配置（从内存缓存返回，通过 MongoDB 同步）
    */
   getConfig(): AppConfig {
-    // 每次都从文件读取，确保获取最新配置
-    this.config = this.loadConfig()
+    return this.config
+  }
+
+  /**
+   * 从 MongoDB 刷新配置到内存
+   */
+  async refreshConfig(): Promise<AppConfig> {
+    try {
+      const collection = this.databaseService.getDb().collection('config')
+      const doc = await collection.findOne({ key: 'app_config' }) as any
+      if (doc) {
+        const defaults = this.getDefaultConfig()
+        const stored = doc.value || {}
+        this.config = {
+          port: stored.port ?? defaults.port,
+          sora: { ...defaults.sora, ...stored.sora },
+          veo: { ...defaults.veo, ...stored.veo },
+          geminiImage: { ...defaults.geminiImage, ...stored.geminiImage },
+          grok: { ...defaults.grok, ...stored.grok },
+          grokImage: { ...defaults.grokImage, ...stored.grokImage },
+        }
+      }
+    } catch (error) {
+      this.logger.error(`❌ Failed to refresh config from MongoDB: ${error.message}`)
+    }
     return this.config
   }
 
@@ -99,22 +166,26 @@ export class ConfigService {
     return {
       port: config.port,
       sora: {
-        server: config.sora.server,
-        key: this.maskKey(config.sora.key),
-        characterServer: config.sora.characterServer,
-        characterKey: this.maskKey(config.sora.characterKey),
+        server: config.sora?.server ?? '',
+        key: this.maskKey(config.sora?.key ?? ''),
+        characterServer: config.sora?.characterServer ?? '',
+        characterKey: this.maskKey(config.sora?.characterKey ?? ''),
       },
       veo: {
-        server: config.veo.server,
-        key: this.maskKey(config.veo.key),
+        server: config.veo?.server ?? '',
+        key: this.maskKey(config.veo?.key ?? ''),
       },
       geminiImage: {
-        server: config.geminiImage.server,
-        key: this.maskKey(config.geminiImage.key),
+        server: config.geminiImage?.server ?? '',
+        key: this.maskKey(config.geminiImage?.key ?? ''),
       },
       grok: {
-        server: config.grok.server,
-        key: this.maskKey(config.grok.key),
+        server: config.grok?.server ?? '',
+        key: this.maskKey(config.grok?.key ?? ''),
+      },
+      grokImage: {
+        server: config.grokImage?.server ?? '',
+        key: this.maskKey(config.grokImage?.key ?? ''),
       },
     }
   }
@@ -130,28 +201,35 @@ export class ConfigService {
   /**
    * 更新配置
    */
-  updateConfig(newConfig: Partial<AppConfig>): AppConfig {
+  async updateConfig(newConfig: Partial<AppConfig>): Promise<AppConfig> {
     const currentConfig = this.getConfig()
     
     // 深度合并配置
     this.config = this.deepMerge(currentConfig, newConfig)
     
-    // 保存到文件
-    this.saveConfig()
+    // 保存到 MongoDB
+    await this.saveConfig()
     
-    this.logger.log('✅ Config updated and saved')
+    this.logger.log('✅ Config updated and saved to MongoDB')
     return this.config
   }
 
   /**
    * 更新单个服务配置
    */
-  updateServiceConfig(
-    service: 'sora' | 'veo' | 'geminiImage' | 'grok',
+  async updateServiceConfig(
+    service: 'sora' | 'veo' | 'geminiImage' | 'grok' | 'grokImage',
     config: { server?: string; key?: string; characterServer?: string; characterKey?: string },
-  ): AppConfig {
+  ): Promise<AppConfig> {
     const currentConfig = this.getConfig()
     
+    // 确保子对象存在
+    if (!currentConfig.sora) currentConfig.sora = { server: '', key: '', characterServer: '', characterKey: '' }
+    if (!currentConfig.veo) currentConfig.veo = { server: '', key: '' }
+    if (!currentConfig.geminiImage) currentConfig.geminiImage = { server: '', key: '' }
+    if (!currentConfig.grok) currentConfig.grok = { server: '', key: '' }
+    if (!currentConfig.grokImage) currentConfig.grokImage = { server: '', key: '' }
+
     if (service === 'sora') {
       if (config.server !== undefined) currentConfig.sora.server = config.server
       if (config.key !== undefined) currentConfig.sora.key = config.key
@@ -166,24 +244,37 @@ export class ConfigService {
     } else if (service === 'grok') {
       if (config.server !== undefined) currentConfig.grok.server = config.server
       if (config.key !== undefined) currentConfig.grok.key = config.key
+    } else if (service === 'grokImage') {
+      if (config.server !== undefined) currentConfig.grokImage.server = config.server
+      if (config.key !== undefined) currentConfig.grokImage.key = config.key
     }
 
     this.config = currentConfig
-    this.saveConfig()
+    await this.saveConfig()
     
-    this.logger.log(`✅ ${service} config updated`)
+    this.logger.log(`✅ ${service} config updated in MongoDB`)
     return this.config
   }
 
   /**
-   * 保存配置到文件
+   * 保存配置到 MongoDB
    */
-  private saveConfig(): void {
+  private async saveConfig(): Promise<void> {
     try {
-      fs.writeFileSync(this.configPath, JSON.stringify(this.config, null, 2), 'utf-8')
-      this.logger.log(`💾 Config saved to ${this.configPath}`)
+      const collection = this.databaseService.getDb().collection('config')
+      await collection.updateOne(
+        { key: 'app_config' },
+        {
+          $set: {
+            value: this.config,
+            updatedAt: new Date(),
+          },
+        },
+        { upsert: true },
+      )
+      this.logger.log('💾 Config saved to MongoDB')
     } catch (error) {
-      this.logger.error(`❌ Failed to save config: ${error}`)
+      this.logger.error(`❌ Failed to save config to MongoDB: ${error.message}`)
       throw error
     }
   }
@@ -206,18 +297,22 @@ export class ConfigService {
   // ===== 便捷获取方法 =====
 
   getSoraConfig() {
-    return this.getConfig().sora
+    return this.getConfig().sora || { server: '', key: '', characterServer: '', characterKey: '' }
   }
 
   getVeoConfig() {
-    return this.getConfig().veo
+    return this.getConfig().veo || { server: '', key: '' }
   }
 
   getGeminiImageConfig() {
-    return this.getConfig().geminiImage
+    return this.getConfig().geminiImage || { server: '', key: '' }
   }
 
   getGrokConfig() {
-    return this.getConfig().grok
+    return this.getConfig().grok || { server: '', key: '' }
+  }
+
+  getGrokImageConfig() {
+    return this.getConfig().grokImage || { server: '', key: '' }
   }
 }

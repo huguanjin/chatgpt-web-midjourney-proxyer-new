@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useVideoStore } from '@/stores/video'
 
 const store = useVideoStore()
 const tasks = computed(() => store.tasks)
+const loading = computed(() => store.loading)
 
 const statusText: Record<string, string> = {
   queued: '排队中',
@@ -23,11 +24,18 @@ const deleteTask = (id: string) => {
 
 const clearCompleted = () => {
   if (confirm('确定清除所有已完成的任务？')) {
-    store.tasks
-      .filter(t => t.status === 'completed')
-      .forEach(t => store.deleteTask(t.id))
+    store.clearCompletedTasks()
   }
 }
+
+const refreshTasks = () => {
+  store.loadTasks()
+}
+
+// 页面加载时从后端获取任务
+onMounted(() => {
+  store.loadTasks()
+})
 </script>
 
 <template>
@@ -37,12 +45,21 @@ const clearCompleted = () => {
         <h2 class="card-title">
           📋 任务列表
         </h2>
-        <button v-if="tasks.length > 0" class="btn btn-secondary" @click="clearCompleted">
-          清除已完成
-        </button>
+        <div class="card-header-actions">
+          <button class="btn btn-secondary" @click="refreshTasks" :disabled="loading">
+            {{ loading ? '加载中...' : '🔄 刷新' }}
+          </button>
+          <button v-if="tasks.length > 0" class="btn btn-secondary" @click="clearCompleted">
+            清除已完成
+          </button>
+        </div>
       </div>
 
-      <div v-if="tasks.length === 0" class="empty">
+      <div v-if="loading && tasks.length === 0" class="empty">
+        <p>⏳ 加载中...</p>
+      </div>
+
+      <div v-else-if="tasks.length === 0" class="empty">
         <p>🎬 暂无任务</p>
         <p style="margin-top: 8px">
           <router-link to="/" class="btn btn-primary">
@@ -117,6 +134,11 @@ const clearCompleted = () => {
 
 .card-header .card-title {
   margin-bottom: 0;
+}
+
+.card-header-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .task-grid {

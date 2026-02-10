@@ -9,15 +9,18 @@ import {
   Query,
   Req,
   UploadedFiles,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common'
 import { FilesInterceptor } from '@nestjs/platform-express'
 import { Request } from 'express'
 import { GeminiImageService } from './gemini-image.service'
-import type { CreateImageDto } from './dto/create-image.dto'
-import type { QueryImageDto } from './dto/query-image.dto'
+import { CreateImageDto } from './dto/create-image.dto'
+import { QueryImageDto } from './dto/query-image.dto'
+import { JwtAuthGuard } from '../auth/jwt-auth.guard'
 
 @Controller('v1/image')
+@UseGuards(JwtAuthGuard)
 export class GeminiImageController {
   private readonly logger = new Logger(GeminiImageController.name)
 
@@ -28,14 +31,16 @@ export class GeminiImageController {
    * POST /v1/image/create
    */
   @Post('create')
-  async createImage(@Body() createImageDto: CreateImageDto) {
+  async createImage(@Body() createImageDto: CreateImageDto, @Req() req: Request) {
+    const username = (req as any).user?.username || 'anonymous'
     this.logger.log(`🖼️ Creating image with model: ${createImageDto.model || 'gemini-3-pro-image-preview'}`)
     this.logger.log(`📝 Prompt: ${createImageDto.prompt}`)
     this.logger.log(`📐 Aspect Ratio: ${createImageDto.aspectRatio || '1:1'}`)
     this.logger.log(`📏 Image Size: ${createImageDto.imageSize || '1K'}`)
+    this.logger.log(`👤 User: ${username}`)
 
     try {
-      const result = await this.geminiImageService.createImage(createImageDto)
+      const result = await this.geminiImageService.createImage(createImageDto, username)
       this.logger.log(`✅ Image task created: ${result.id}`)
       return result
     }
@@ -60,10 +65,13 @@ export class GeminiImageController {
   @UseInterceptors(FilesInterceptor('reference_images', 5))
   async createImageWithRef(
     @Body() createImageDto: CreateImageDto,
+    @Req() req: Request,
     @UploadedFiles() files?: Express.Multer.File[],
   ) {
+    const username = (req as any).user?.username || 'anonymous'
     this.logger.log(`🖼️ Creating image with reference`)
     this.logger.log(`📝 Prompt: ${createImageDto.prompt}`)
+    this.logger.log(`👤 User: ${username}`)
 
     try {
       if (files && files.length > 0) {
@@ -74,7 +82,7 @@ export class GeminiImageController {
         this.logger.log(`📎 Reference images: ${files.length}`)
       }
 
-      const result = await this.geminiImageService.createImage(createImageDto)
+      const result = await this.geminiImageService.createImage(createImageDto, username)
       this.logger.log(`✅ Image task created: ${result.id}`)
       return result
     }
@@ -97,15 +105,17 @@ export class GeminiImageController {
    */
   @Post('generate')
   async generateImage(@Body() createImageDto: CreateImageDto, @Req() req: Request) {
+    const username = (req as any).user?.username || 'anonymous'
     this.logger.log(`🖼️ Generating image synchronously`)
     this.logger.log(`📦 Raw Body: ${JSON.stringify(req.body)}`)
     this.logger.log(`📦 DTO: ${JSON.stringify(createImageDto)}`)
-    this.logger.log(`�📝 Prompt: ${createImageDto.prompt}`)
+    this.logger.log(`📝 Prompt: ${createImageDto.prompt}`)
     this.logger.log(`📐 Aspect Ratio: ${createImageDto.aspectRatio || '1:1'}`)
     this.logger.log(`📏 Image Size: ${createImageDto.imageSize || '1K'}`)
+    this.logger.log(`👤 User: ${username}`)
 
     try {
-      const result = await this.geminiImageService.generateImageSync(createImageDto)
+      const result = await this.geminiImageService.generateImageSync(createImageDto, username)
       this.logger.log(`✅ Image generated: ${result.images?.length || 0} image(s)`)
       return result
     }
@@ -130,10 +140,13 @@ export class GeminiImageController {
   @UseInterceptors(FilesInterceptor('reference_images', 5))
   async generateImageWithRef(
     @Body() createImageDto: CreateImageDto,
+    @Req() req: Request,
     @UploadedFiles() files?: Express.Multer.File[],
   ) {
+    const username = (req as any).user?.username || 'anonymous'
     this.logger.log(`🖼️ Generating image with reference`)
     this.logger.log(`📝 Prompt: ${createImageDto.prompt}`)
+    this.logger.log(`👤 User: ${username}`)
 
     try {
       if (files && files.length > 0) {
@@ -143,7 +156,7 @@ export class GeminiImageController {
         }))
       }
 
-      const result = await this.geminiImageService.generateImageSync(createImageDto)
+      const result = await this.geminiImageService.generateImageSync(createImageDto, username)
       this.logger.log(`✅ Image generated: ${result.images?.length || 0} image(s)`)
       return result
     }

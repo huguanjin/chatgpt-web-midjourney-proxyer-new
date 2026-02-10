@@ -3,22 +3,41 @@ import axios from 'axios'
 import * as FormData from 'form-data'
 import { CreateVeoVideoDto } from './dto/create-veo-video.dto'
 import { ConfigService } from '../config/config.service'
+import { UserConfigService } from '../user-config/user-config.service'
 
 @Injectable()
 export class VeoService {
   private readonly logger = new Logger(VeoService.name)
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly userConfigService: UserConfigService,
+  ) {
     const config = this.configService.getVeoConfig()
     this.logger.log(`🔧 VEO Server: ${config.server}`)
     this.logger.log(`🔑 VEO Key: ${config.key ? `****${config.key.slice(-8)}` : 'NOT SET'}`)
   }
 
   /**
+   * 获取用户级 VEO 配置（优先用户配置，回退全局配置）
+   */
+  private async getUserVeoConfig(username: string) {
+    try {
+      const userConfig = await this.userConfigService.getUserConfig(username)
+      if (userConfig.veo?.server) {
+        return userConfig.veo
+      }
+    } catch (e) {
+      this.logger.warn(`⚠️ Failed to load user config for ${username}, using global`)
+    }
+    return this.configService.getVeoConfig()
+  }
+
+  /**
    * 创建 VEO 视频任务（支持参考图）
    */
-  async createVideo(dto: CreateVeoVideoDto, files?: Express.Multer.File[]): Promise<any> {
-    const config = this.configService.getVeoConfig()
+  async createVideo(dto: CreateVeoVideoDto, files?: Express.Multer.File[], username?: string): Promise<any> {
+    const config = await this.getUserVeoConfig(username || 'unknown')
     
     this.logger.log(`📤 Creating VEO video with model: ${dto.model}`)
     this.logger.log(`📝 Prompt: ${dto.prompt}`)
@@ -66,8 +85,8 @@ export class VeoService {
   /**
    * 查询 VEO 视频任务状态
    */
-  async queryVideo(taskId: string): Promise<any> {
-    const config = this.configService.getVeoConfig()
+  async queryVideo(taskId: string, username?: string): Promise<any> {
+    const config = await this.getUserVeoConfig(username || 'unknown')
     
     this.logger.log(`📤 Querying VEO task: ${taskId}`)
 
