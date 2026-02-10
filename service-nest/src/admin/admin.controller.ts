@@ -1,0 +1,135 @@
+import {
+  Controller,
+  Get,
+  HttpException,
+  HttpStatus,
+  Logger,
+  Param,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common'
+import { JwtAuthGuard } from '../auth/jwt-auth.guard'
+import { AdminService } from './admin.service'
+
+@Controller('v1/admin')
+@UseGuards(JwtAuthGuard)
+export class AdminController {
+  private readonly logger = new Logger(AdminController.name)
+
+  /**
+   * 管理员角色检查
+   */
+  private ensureAdmin(req: any) {
+    if (req.user?.role !== 'admin') {
+      throw new HttpException(
+        { status: 'error', message: '需要管理员权限' },
+        HttpStatus.FORBIDDEN,
+      )
+    }
+  }
+
+  constructor(private readonly adminService: AdminService) {}
+
+  /**
+   * 获取所有用户列表
+   * GET /v1/admin/users?page=1&limit=20
+   */
+  @Get('users')
+  async getUsers(
+    @Req() req: any,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('role') role?: string,
+    @Query('keyword') keyword?: string,
+  ) {
+    this.ensureAdmin(req)
+    this.logger.log(`👑 Admin listing users`)
+
+    const result = await this.adminService.getUsers({
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 50,
+      role,
+      keyword,
+    })
+
+    return { status: 'success', ...result }
+  }
+
+  /**
+   * 获取指定用户详情（含配置信息）
+   * GET /v1/admin/users/:userId
+   */
+  @Get('users/:userId')
+  async getUserDetail(@Req() req: any, @Param('userId') userId: string) {
+    this.ensureAdmin(req)
+    this.logger.log(`👑 Admin viewing user: ${userId}`)
+
+    const detail = await this.adminService.getUserDetail(userId)
+    if (!detail) {
+      throw new HttpException(
+        { status: 'error', message: '用户不存在' },
+        HttpStatus.NOT_FOUND,
+      )
+    }
+
+    return { status: 'success', data: detail }
+  }
+
+  /**
+   * 获取指定用户的视频任务列表
+   * GET /v1/admin/users/:userId/video-tasks?page=1&limit=20&platform=sora
+   */
+  @Get('users/:userId/video-tasks')
+  async getUserVideoTasks(
+    @Req() req: any,
+    @Param('userId') userId: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('platform') platform?: string,
+    @Query('status') status?: string,
+  ) {
+    this.ensureAdmin(req)
+
+    const result = await this.adminService.getUserVideoTasks(userId, {
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 20,
+      platform: platform as any,
+      status,
+    })
+
+    return { status: 'success', ...result }
+  }
+
+  /**
+   * 获取指定用户的图片任务列表
+   * GET /v1/admin/users/:userId/image-tasks?page=1&limit=20
+   */
+  @Get('users/:userId/image-tasks')
+  async getUserImageTasks(
+    @Req() req: any,
+    @Param('userId') userId: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    this.ensureAdmin(req)
+
+    const result = await this.adminService.getUserImageTasks(userId, {
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 20,
+    })
+
+    return { status: 'success', ...result }
+  }
+
+  /**
+   * 获取平台统计概览
+   * GET /v1/admin/stats
+   */
+  @Get('stats')
+  async getStats(@Req() req: any) {
+    this.ensureAdmin(req)
+    const stats = await this.adminService.getStats()
+    return { status: 'success', data: stats }
+  }
+}

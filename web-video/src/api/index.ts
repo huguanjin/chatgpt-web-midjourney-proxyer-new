@@ -370,4 +370,71 @@ export const videoTasksApi = {
     api.delete<{ status: string; message: string; deletedCount: number }>('/v1/tasks/completed/clear'),
 }
 
+// ============ Admin API (管理员用户管理) ============
+
+export interface AdminUser {
+  _id: string
+  username: string
+  role: string
+  created_at: number
+  last_login: number
+  videoTaskCount: number
+  imageTaskCount: number
+}
+
+export interface AdminUserDetail {
+  user: {
+    _id: string
+    username: string
+    role: string
+    created_at: number
+    last_login: number
+  }
+  config: Record<string, any> | null
+  videoTaskCount: number
+  imageTaskCount: number
+}
+
+export interface AdminStats {
+  totalUsers: number
+  totalVideoTasks: number
+  totalImageTasks: number
+  videoByPlatform: Record<string, number>
+  videoByStatus: Record<string, number>
+  imageByStatus: Record<string, number>
+}
+
+export const adminApi = {
+  // 获取用户列表（分页）
+  getUsers: (params?: { page?: number; limit?: number; role?: string; keyword?: string }) =>
+    api.get<{ status: string; data: AdminUser[]; total: number; page: number; limit: number }>(
+      '/v1/admin/users',
+      { params },
+    ),
+
+  // 获取单个用户详情（含配置）
+  getUserDetail: (userId: string) =>
+    api.get<{ status: string; data: AdminUserDetail }>(
+      `/v1/admin/users/${encodeURIComponent(userId)}`,
+    ),
+
+  // 获取用户的视频任务（分页）
+  getUserVideoTasks: (userId: string, params?: { page?: number; limit?: number }) =>
+    api.get<{ status: string; data: any[]; total: number; page: number; limit: number }>(
+      `/v1/admin/users/${encodeURIComponent(userId)}/video-tasks`,
+      { params },
+    ),
+
+  // 获取用户的图片任务（分页）
+  getUserImageTasks: (userId: string, params?: { page?: number; limit?: number }) =>
+    api.get<{ status: string; data: any[]; total: number; page: number; limit: number }>(
+      `/v1/admin/users/${encodeURIComponent(userId)}/image-tasks`,
+      { params },
+    ),
+
+  // 获取平台统计概览
+  getStats: () =>
+    api.get<{ status: string; data: AdminStats }>('/v1/admin/stats'),
+}
+
 export default api

@@ -10,6 +10,7 @@
           <router-link to="/characters" class="nav-link">角色管理</router-link>
           <router-link to="/query" class="nav-link">任务查询</router-link>
           <router-link to="/config" class="nav-link">⚙️ 配置</router-link>
+          <router-link v-if="authStore.isAdmin" to="/admin" class="nav-link admin-link">👥 用户管理</router-link>
         </nav>
         <div class="user-area">
           <!-- 用户头像按钮 -->

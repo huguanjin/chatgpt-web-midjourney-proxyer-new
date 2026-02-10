@@ -10,6 +10,7 @@ import { AuthModule } from './auth/auth.module'
 import { UserConfigModule } from './user-config/user-config.module'
 import { VideoTasksModule } from './video-tasks/video-tasks.module'
 import { FileStorageModule } from './file-storage/file-storage.module'
+import { AdminModule } from './admin/admin.module'
 
 @Module({
   imports: [
@@ -38,6 +39,8 @@ import { FileStorageModule } from './file-storage/file-storage.module'
     GeminiImageModule,
     // Grok 视频生成模块
     GrokVideoModule,
+    // 管理员模块 - 用户管理、任务统计
+    AdminModule,
   ],
 })
 export class AppModule {}
