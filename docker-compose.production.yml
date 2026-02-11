@@ -1,0 +1,51 @@
+# ============================================================
+# 生产部署用 docker-compose（使用 GitHub Container Registry 预构建镜像）
+# 
+# 使用方式：
+#   1. 将此文件和 .env 复制到服务器任意目录
+#   2. 编辑 .env 中的配置
+#   3. docker compose -f docker-compose.production.yml up -d
+#
+# 更新镜像：
+#   docker compose -f docker-compose.production.yml pull
+#   docker compose -f docker-compose.production.yml up -d
+# ============================================================
+
+services:
+  # ============ 后端 API ============
+  api:
+    # ⬇️ 将 <OWNER> 替换为你的 GitHub 用户名（小写）
+    image: ghcr.io/<OWNER>/ai-creator-api:latest
+    container_name: ai-creator-api
+    restart: unless-stopped
+    environment:
+      PORT: 3003
+      NODE_ENV: production
+      # MongoDB 连接（连接宿主机上的 MongoDB）
+      MONGODB_URI: mongodb://host.docker.internal:27017/
+      MONGODB_DATABASE: PPTTOVideo
+      TZ: Asia/Shanghai
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # 上传文件持久化
+      - /opt/ai-creator/uploads:/app/uploads
+    networks:
+      - ai-creator-net
+
+  # ============ 前端 Web ============
+  web:
+    # ⬇️ 将 <OWNER> 替换为你的 GitHub 用户名（小写）
+    image: ghcr.io/<OWNER>/ai-creator-web:latest
+    container_name: ai-creator-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+      # - "443:443"     # HTTPS（需配置 SSL 证书）
+    networks:
+      - ai-creator-net
+
+networks:
+  ai-creator-net:

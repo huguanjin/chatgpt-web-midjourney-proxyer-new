@@ -78,6 +78,9 @@ AI 创作平台 - 支持 OpenAI Sora、Google VEO、Grok 视频生成，以及 G
 │   │   └── router/            # 路由配置 (含权限守卫)
 │   └── package.json
 │
+├── .github/workflows/         # 🔄 GitHub Actions (CI/CD 自动构建 Docker 镜像)
+├── docker-compose.yml         # 🐳 Docker 本地构建部署
+├── docker-compose.production.yml  # 🐳 Docker 镜像拉取部署
 ├── DEPLOY.md                  # 🚀 Linux 服务器部署文档
 └── README.md
 ```
@@ -283,16 +286,24 @@ pnpm start:prod
 
 ## 部署
 
-详见 [DEPLOY.md](DEPLOY.md)，包含完整的 Linux 云服务器部署指南：
+### CI/CD 自动构建 + 镜像拉取（推荐）
 
-- 环境安装 (Node.js、MongoDB、Nginx)
-- MongoDB 安全配置
-- Nginx 反向代理配置
-- PM2 进程管理
-- SSL 证书 (HTTPS)
-- 防火墙配置
-- 自动备份与运维脚本
-- 故障排查指南
+项目已配置 GitHub Actions，**每次推送代码到 master 自动构建 Docker 镜像**并推送到 GitHub Container Registry。服务器上无需克隆代码，只需两条命令即可更新：
+
+```bash
+# 服务器上拉取最新镜像并重启
+docker compose pull
+docker compose up -d
+```
+
+### 其他部署方式
+
+详见 [DEPLOY.md](DEPLOY.md)，包含三种部署方式的完整指南：
+
+- **CI/CD 镜像拉取部署（推荐）** — 推送代码自动构建镜像，服务器直接拉取
+- **Docker 本地构建部署** — 在服务器上克隆代码并构建
+- **手动部署** — Node.js + MongoDB + Nginx + PM2
+- MongoDB 安全配置 / SSL 证书 / 防火墙 / 故障排查
 
 ## License
 

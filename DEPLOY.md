@@ -2,12 +2,18 @@
 
 本文档详细介绍如何将 AI 创作平台部署到 Linux 云服务器上。支持两种部署方式：
 
-- **方式一：Docker Compose 部署（推荐）** — 一键启动，适合快速部署
-- **方式二：手动部署** — 直接在服务器上安装各组件
+- **方式一：CI/CD 镜像拉取部署（推荐）** — 代码推送后自动构建镜像，服务器直接拉取，无需传代码
+- **方式二：Docker Compose 本地构建部署** — 服务器上克隆代码并构建
+- **方式三：手动部署** — 直接在服务器上安装各组件
 
 ## 目录
 
-### Docker 部署（推荐）
+### CI/CD 镜像拉取部署（推荐）
+- [CI/CD 自动构建说明](#cicd-自动构建说明)
+- [服务器拉取镜像部署](#服务器拉取镜像部署)
+- [镜像更新（日常使用）](#镜像更新日常使用)
+
+### Docker 本地构建部署
 - [Docker 环境准备](#docker-环境准备)
 - [一键启动](#一键启动)
 - [Docker 配置说明](#docker-配置说明)
@@ -29,9 +35,185 @@
 
 ---
 
-# Docker Compose 部署（推荐）
+# CI/CD 镜像拉取部署（推荐）
 
-> 最简单的部署方式，只需安装 Docker 即可一键启动前后端服务（后端 API + 前端 Nginx），连接服务器上已有的 MongoDB。
+> **最省心的部署方式** — 本地提交代码到 GitHub → Actions 自动构建 Docker 镜像 → 服务器拉取最新镜像启动。无需在服务器上克隆代码或构建项目。
+
+## CI/CD 自动构建说明
+
+项目已配置 GitHub Actions 自动构建工作流（`.github/workflows/docker-image.yml`），会自动构建两个 Docker 镜像并推送到 **GitHub Container Registry (ghcr.io)**：
+
+| 镜像 | 说明 |
+|------|------|
+| `ghcr.io/<你的GitHub用户名>/ai-creator-api` | 后端 API 服务 |
+| `ghcr.io/<你的GitHub用户名>/ai-creator-web` | 前端 Web 应用 |
+
+### 触发条件
+
+| 事件 | 生成的标签 |
+|------|------------|
+| 推送到 `master` 分支 | `latest` + 短 SHA（如 `a1b2c3d`） |
+| 发布 Release（如 `v1.0.0`） | `v1.0.0` + `latest` + 短 SHA |
+| 手动触发（workflow_dispatch） | `latest` + 短 SHA |
+
+### 前置配置
+
+1. **设置仓库 Package 权限**
+   - 进入 GitHub 仓库 → Settings → Actions → General
+   - 在 "Workflow permissions" 中选择 **Read and write permissions**
+   - 保存
+
+2. **（可选）公开镜像**
+   - 构建完成后，进入 GitHub 个人主页 → Packages
+   - 点击对应的 Package → Package settings → Change visibility → Public
+   - 设为 Public 后，服务器拉取无需登录认证
+
+### 验证构建
+
+推送代码后，在 GitHub 仓库的 **Actions** 标签页可以查看构建进度和日志。构建成功后，在仓库右侧的 **Packages** 中可以看到镜像。
+
+## 服务器拉取镜像部署
+
+### 1. 安装 Docker
+
+```bash
+# Ubuntu / Debian
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
+### 2. 创建部署目录和配置文件
+
+```bash
+mkdir -p /opt/ai-creator
+cd /opt/ai-creator
+
+# 创建上传文件目录
+mkdir -p uploads/images
+```
+
+### 3. 创建 docker-compose.yml
+
+```bash
+cat > docker-compose.yml << 'EOF'
+services:
+  api:
+    image: ghcr.io/<OWNER>/ai-creator-api:latest
+    container_name: ai-creator-api
+    restart: unless-stopped
+    environment:
+      PORT: 3003
+      NODE_ENV: production
+      MONGODB_URI: mongodb://host.docker.internal:27017/
+      MONGODB_DATABASE: PPTTOVideo
+      TZ: Asia/Shanghai
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - /opt/ai-creator/uploads:/app/uploads
+    networks:
+      - ai-creator-net
+
+  web:
+    image: ghcr.io/<OWNER>/ai-creator-web:latest
+    container_name: ai-creator-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+    networks:
+      - ai-creator-net
+
+networks:
+  ai-creator-net:
+EOF
+```
+
+> ⚠️ 将 `<OWNER>` 替换为你的 **GitHub 用户名（小写）**
+
+### 4. 登录 GHCR（如镜像为私有仓库）
+
+如果镜像是公开的（Public），跳过此步。如果是私有的：
+
+```bash
+# 在 GitHub 生成 Personal Access Token (classic)
+# 权限勾选: read:packages
+# 地址: https://github.com/settings/tokens
+
+echo "YOUR_GITHUB_TOKEN" | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
+```
+
+### 5. 拉取镜像并启动
+
+```bash
+cd /opt/ai-creator
+
+# 拉取最新镜像
+docker compose pull
+
+# 启动服务
+docker compose up -d
+
+# 查看状态
+docker compose ps
+
+# 查看后端日志
+docker compose logs -f api
+```
+
+### 6. 访问应用
+
+| 地址 | 说明 |
+|------|------|
+| http://服务器IP | 前端应用 |
+| http://服务器IP/config | 配置管理 |
+| http://服务器IP/admin | 管理员面板 |
+
+> **首次启动**会自动创建管理员账号：
+> ```bash
+> docker compose exec api cat /app/initial_admin_credentials.txt
+> ```
+
+## 镜像更新（日常使用）
+
+每次推送代码到 `master` 后，GitHub Actions 会自动构建新镜像。在服务器上只需两条命令即可更新：
+
+```bash
+cd /opt/ai-creator
+
+# 拉取最新镜像
+docker compose pull
+
+# 重启服务（自动使用新镜像）
+docker compose up -d
+
+# （可选）清理旧镜像释放磁盘空间
+docker image prune -f
+```
+
+### 回滚到指定版本
+
+如果新版本有问题，可以用 SHA 标签快速回滚：
+
+```bash
+# 查看可用标签
+# 访问: https://github.com/<OWNER>?tab=packages
+
+# 修改 docker-compose.yml 中的镜像标签
+# image: ghcr.io/<OWNER>/ai-creator-api:a1b2c3d
+# image: ghcr.io/<OWNER>/ai-creator-web:a1b2c3d
+
+docker compose pull
+docker compose up -d
+```
+
+---
+
+# Docker Compose 本地构建部署
+
+> 在服务器上克隆代码并本地构建 Docker 镜像。适合无法使用 GitHub Actions 或需要自定义构建的场景。
 
 ## Docker 环境准备
 
@@ -1045,14 +1227,15 @@ chmod +x /opt/ai-creator/deploy.sh
 
 ## 部署方式对比
 
-| 对比项 | Docker Compose | 手动部署 |
-|--------|---------------|----------|
-| 部署难度 | ⭐ 简单 | ⭐⭐⭐ 复杂 |
-| 环境隔离 | ✅ 完全隔离 | ❌ 共享系统环境 |
-| 一键启动 | ✅ `docker compose up -d` | ❌ 需逐个启动 |
-| 迁移方便 | ✅ 镜像可迁移 | ❌ 需重新安装 |
-| 资源占用 | 稍多（容器开销） | 稍少 |
-| 调试便利 | 需进入容器 | 直接操作 |
-| 自定义灵活性 | 中等 | 高 |
+| 对比项 | CI/CD 镜像拉取（推荐） | Docker 本地构建 | 手动部署 |
+|--------|----------------------|---------------|----------|
+| 部署难度 | ⭐ 最简单 | ⭐⭐ 简单 | ⭐⭐⭐ 复杂 |
+| 需要传代码到服务器 | ❌ 不需要 | ✅ 需要克隆仓库 | ✅ 需要 |
+| 自动化构建 | ✅ 推送即构建 | ❌ 手动构建 | ❌ 手动构建 |
+| 更新方式 | `pull` + `up -d` | `--build` + `up -d` | 手动更新各组件 |
+| 环境隔离 | ✅ 完全隔离 | ✅ 完全隔离 | ❌ 共享系统环境 |
+| 版本回滚 | ✅ 指定镜像标签 | ❌ 需要 git 回滚重建 | ❌ 复杂 |
+| 服务器磁盘占用 | 少（仅镜像） | 多（代码 + 镜像） | 中等 |
+| 调试便利 | 需进入容器 | 需进入容器 | 直接操作 |
 
-> **推荐**：新项目优先使用 Docker Compose 部署，简单可靠，方便后续更新迁移。
+> **推荐**：优先使用 CI/CD 镜像拉取方式，代码推送到 GitHub 后自动构建，服务器只需两条命令即可更新。
