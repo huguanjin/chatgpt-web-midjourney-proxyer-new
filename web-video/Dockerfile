@@ -34,6 +34,6 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 # 从 builder 复制构建产物
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-EXPOSE 80
+EXPOSE 8889
 
 CMD ["nginx", "-g", "daemon off;"]
