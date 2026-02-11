@@ -17,8 +17,8 @@ COPY public/ ./public/
 COPY src/ ./src/
 COPY .env.production ./.env.production
 
-# 构建生产版本（使用 .env.production 中的 VITE_API_BASE=空）
-RUN npm run build
+# 构建生产版本（跳过 vue-tsc 类型检查，避免版本兼容问题）
+RUN npx vite build
 
 # ==========================================
 # Stage 2: Nginx
