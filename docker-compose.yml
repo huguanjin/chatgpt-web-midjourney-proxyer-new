@@ -39,9 +39,9 @@ services:
       NODE_ENV: production
       # 宿主机网络模式，直接用 127.0.0.1 连接 MongoDB
       MONGODB_URI: mongodb://127.0.0.1:27017/
-      MONGODB_DATABASE: PPTTOVideo
+      MONGODB_DATABASE: aifastcreator
       # 如 MongoDB 启用了认证：
-      # MONGODB_URI: mongodb://appuser:your_password@127.0.0.1:27017/PPTTOVideo?authSource=PPTTOVideo
+      # MONGODB_URI: mongodb://appuser:your_password@127.0.0.1:27017/aifastcreator?authSource=aifastcreator
       TZ: Asia/Shanghai
     volumes:
       # 上传文件持久化 —— 映射到宿主机具体目录
