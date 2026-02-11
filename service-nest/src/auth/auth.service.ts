@@ -71,6 +71,12 @@ export class AuthService implements OnApplicationBootstrap {
     const result = await collection.insertOne(adminUser as any)
     const adminId = result.insertedId.toString()
     this.logger.log('✅ Default admin account created')
+    this.logger.warn('=========================================')
+    this.logger.warn('  🔑 初始管理员账号 Initial Admin Credentials')
+    this.logger.warn(`  👤 用户名 (Username): ${username}`)
+    this.logger.warn(`  🔒 密码   (Password): ${rawPassword}`)
+    this.logger.warn('  ⚠️  请登录后立即修改密码！')
+    this.logger.warn('=========================================')
 
     // 为管理员初始化默认 API 配置（使用 userId）
     await this.userConfigService.initUserConfig(adminId)
