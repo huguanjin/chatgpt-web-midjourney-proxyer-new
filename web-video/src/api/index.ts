@@ -446,4 +446,65 @@ export const adminApi = {
     ),
 }
 
+// ============ Feedback API ============
+
+export interface FeedbackItem {
+  _id: string
+  userId?: string
+  username?: string
+  title: string
+  content: string
+  type: 'bug' | 'feature' | 'question' | 'other'
+  status: 'open' | 'replied' | 'resolved' | 'closed'
+  adminReply: string | null
+  repliedAt: number | null
+  repliedBy?: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+export interface FeedbackStats {
+  total: number
+  byStatus: Record<string, number>
+  byType: Record<string, number>
+}
+
+export const feedbackApi = {
+  // 用户提交反馈
+  create: (data: { title: string; content: string; type?: string }) =>
+    api.post<{ status: string; data: FeedbackItem }>('/v1/feedback', data),
+
+  // 用户查看自己的反馈
+  getMyFeedbacks: (params?: { page?: number; limit?: number }) =>
+    api.get<{ status: string; data: FeedbackItem[]; total: number; page: number; limit: number }>(
+      '/v1/feedback/my',
+      { params },
+    ),
+
+  // 管理员获取所有反馈
+  getAllFeedbacks: (params?: { page?: number; limit?: number; status?: string; type?: string; keyword?: string }) =>
+    api.get<{ status: string; data: FeedbackItem[]; total: number; page: number; limit: number }>(
+      '/v1/feedback/admin/all',
+      { params },
+    ),
+
+  // 管理员回复反馈
+  replyFeedback: (feedbackId: string, data: { reply: string; status?: string }) =>
+    api.put<{ status: string; message: string }>(
+      `/v1/feedback/admin/${encodeURIComponent(feedbackId)}/reply`,
+      data,
+    ),
+
+  // 管理员更新反馈状态
+  updateStatus: (feedbackId: string, status: string) =>
+    api.put<{ status: string; message: string }>(
+      `/v1/feedback/admin/${encodeURIComponent(feedbackId)}/status`,
+      { status },
+    ),
+
+  // 管理员获取反馈统计
+  getStats: () =>
+    api.get<{ status: string; data: FeedbackStats }>('/v1/feedback/admin/stats'),
+}
+
 export default api

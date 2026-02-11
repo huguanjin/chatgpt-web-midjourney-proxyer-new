@@ -11,6 +11,7 @@ import { UserConfigModule } from './user-config/user-config.module'
 import { VideoTasksModule } from './video-tasks/video-tasks.module'
 import { FileStorageModule } from './file-storage/file-storage.module'
 import { AdminModule } from './admin/admin.module'
+import { FeedbackModule } from './feedback/feedback.module'
 
 @Module({
   imports: [
@@ -41,6 +42,8 @@ import { AdminModule } from './admin/admin.module'
     GrokVideoModule,
     // 管理员模块 - 用户管理、任务统计
     AdminModule,
+    // 问题反馈模块
+    FeedbackModule,
   ],
 })
 export class AppModule {}
