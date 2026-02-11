@@ -241,6 +241,24 @@ export class AuthService implements OnApplicationBootstrap {
   }
 
   /**
+   * 管理员重置用户密码（无需旧密码）
+   */
+  async resetPassword(userId: string, newPassword: string): Promise<boolean> {
+    const collection = this.databaseService.getDb().collection('users')
+    const user = await collection.findOne({ _id: new ObjectId(userId) }) as any
+    if (!user) return false
+
+    const hashedPassword = this.hashPassword(newPassword)
+    await collection.updateOne(
+      { _id: new ObjectId(userId) },
+      { $set: { password: hashedPassword } },
+    )
+
+    this.logger.log(`🔑 Admin reset password for userId: ${userId} (${user.username})`)
+    return true
+  }
+
+  /**
    * 注册新用户
    */
   async register(username: string, password: string): Promise<any> {

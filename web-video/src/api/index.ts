@@ -437,6 +437,13 @@ export const adminApi = {
   // 获取平台统计概览
   getStats: () =>
     api.get<{ status: string; data: AdminStats }>('/v1/admin/stats'),
+
+  // 管理员重置用户密码
+  resetUserPassword: (userId: string, newPassword: string) =>
+    api.put<{ status: string; message: string }>(
+      `/v1/admin/users/${encodeURIComponent(userId)}/reset-password`,
+      { newPassword },
+    ),
 }
 
 export default api

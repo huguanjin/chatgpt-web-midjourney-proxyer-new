@@ -34,6 +34,14 @@ const imageTotal = ref(0)
 const videoPage = ref(1)
 const imagePage = ref(1)
 
+// 重置密码
+const resetPasswordModal = ref(false)
+const resetPasswordUser = ref<AdminUser | null>(null)
+const resetNewPassword = ref('')
+const resetPasswordLoading = ref(false)
+const resetPasswordMsg = ref('')
+const resetPasswordError = ref('')
+
 // ============ 格式化 ============
 const formatTime = (ts: number) => {
   if (!ts) return '-'
@@ -174,6 +182,40 @@ onMounted(() => {
   loadStats()
   loadUsers()
 })
+
+// ============ 重置密码 ============
+const openResetPassword = (user: AdminUser) => {
+  resetPasswordUser.value = user
+  resetNewPassword.value = ''
+  resetPasswordMsg.value = ''
+  resetPasswordError.value = ''
+  resetPasswordModal.value = true
+}
+
+const closeResetPassword = () => {
+  resetPasswordModal.value = false
+  resetPasswordUser.value = null
+}
+
+const submitResetPassword = async () => {
+  if (!resetPasswordUser.value) return
+  if (resetNewPassword.value.length < 6) {
+    resetPasswordError.value = '密码至少 6 个字符'
+    return
+  }
+  resetPasswordLoading.value = true
+  resetPasswordError.value = ''
+  resetPasswordMsg.value = ''
+  try {
+    const res = await adminApi.resetUserPassword(resetPasswordUser.value._id, resetNewPassword.value)
+    resetPasswordMsg.value = res.data.message || '密码重置成功'
+    resetNewPassword.value = ''
+  } catch (e: any) {
+    resetPasswordError.value = e.response?.data?.message || '重置失败'
+  } finally {
+    resetPasswordLoading.value = false
+  }
+}
 </script>
 
 <template>
@@ -257,9 +299,18 @@ onMounted(() => {
               <td>{{ user.videoTaskCount }}</td>
               <td>{{ user.imageTaskCount }}</td>
               <td>
-                <button class="btn btn-small" @click="toggleExpand(user._id)">
-                  {{ expandedUserId === user._id ? '收起' : '查看详情' }}
-                </button>
+                <div class="action-btns">
+                  <button class="btn btn-small" @click="toggleExpand(user._id)">
+                    {{ expandedUserId === user._id ? '收起' : '查看详情' }}
+                  </button>
+                  <button
+                    class="btn btn-small btn-warn"
+                    @click="openResetPassword(user)"
+                    v-if="user._id !== authStore.userId"
+                  >
+                    重置密码
+                  </button>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -385,6 +436,41 @@ onMounted(() => {
             <span class="page-info">{{ imagePage }} / {{ Math.ceil(imageTotal / 10) }}</span>
             <button class="btn btn-small" :disabled="imagePage >= Math.ceil(imageTotal / 10)" @click="changeImagePage(imagePage + 1)">下一页</button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 重置密码弹窗 -->
+    <div v-if="resetPasswordModal" class="modal-overlay" @click.self="closeResetPassword">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>🔑 重置用户密码</h3>
+          <button class="modal-close" @click="closeResetPassword">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-user-info">用户：<strong>{{ resetPasswordUser?.username }}</strong></p>
+          <div class="form-group">
+            <label>新密码</label>
+            <input
+              v-model="resetNewPassword"
+              type="password"
+              placeholder="请输入新密码（至少6位）"
+              class="form-input"
+              @keyup.enter="submitResetPassword"
+            />
+          </div>
+          <div v-if="resetPasswordError" class="msg msg-error">{{ resetPasswordError }}</div>
+          <div v-if="resetPasswordMsg" class="msg msg-success">{{ resetPasswordMsg }}</div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" @click="closeResetPassword">取消</button>
+          <button
+            class="btn"
+            @click="submitResetPassword"
+            :disabled="resetPasswordLoading || !resetNewPassword"
+          >
+            {{ resetPasswordLoading ? '提交中...' : '确认重置' }}
+          </button>
         </div>
       </div>
     </div>
@@ -593,6 +679,19 @@ onMounted(() => {
 .btn-small {
   padding: 4px 10px;
   font-size: 12px;
+}
+
+.btn-warn {
+  background: #b45309;
+}
+
+.btn-warn:hover:not(:disabled) {
+  background: #92400e;
+}
+
+.action-btns {
+  display: flex;
+  gap: 6px;
 }
 
 /* ============ 分页 ============ */
@@ -822,5 +921,125 @@ onMounted(() => {
   padding: 24px;
   color: #666;
   font-size: 14px;
+}
+
+/* ============ 弹窗 ============ */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: #1e1e2e;
+  border: 1px solid #444;
+  border-radius: 12px;
+  width: 420px;
+  max-width: 90vw;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #333;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #e0e0e0;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 22px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.modal-close:hover {
+  color: #e0e0e0;
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.modal-user-info {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  color: #ccc;
+}
+
+.modal-user-info strong {
+  color: #a78bfa;
+}
+
+.form-group {
+  margin-bottom: 12px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 13px;
+  color: #888;
+  margin-bottom: 6px;
+}
+
+.form-input {
+  width: 100%;
+  background: #2a2a3e;
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: #e0e0e0;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.form-input::placeholder {
+  color: #666;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #7c3aed;
+}
+
+.msg {
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  margin-top: 8px;
+}
+
+.msg-error {
+  background: #7f1d1d33;
+  color: #f87171;
+}
+
+.msg-success {
+  background: #065f4633;
+  color: #4ade80;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid #333;
 }
 </style>

@@ -1,15 +1,18 @@
 import {
+  Body,
   Controller,
   Get,
   HttpException,
   HttpStatus,
   Logger,
   Param,
+  Put,
   Query,
   Req,
   UseGuards,
 } from '@nestjs/common'
 import { JwtAuthGuard } from '../auth/jwt-auth.guard'
+import { AuthService } from '../auth/auth.service'
 import { AdminService } from './admin.service'
 
 @Controller('v1/admin')
@@ -29,7 +32,10 @@ export class AdminController {
     }
   }
 
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly authService: AuthService,
+  ) {}
 
   /**
    * 获取所有用户列表
@@ -120,6 +126,45 @@ export class AdminController {
     })
 
     return { status: 'success', ...result }
+  }
+
+  /**
+   * 管理员重置用户密码
+   * PUT /v1/admin/users/:userId/reset-password
+   */
+  @Put('users/:userId/reset-password')
+  async resetUserPassword(
+    @Req() req: any,
+    @Param('userId') userId: string,
+    @Body() body: { newPassword: string },
+  ) {
+    this.ensureAdmin(req)
+
+    if (!body.newPassword || body.newPassword.length < 6) {
+      throw new HttpException(
+        { status: 'error', message: '新密码至少 6 个字符' },
+        HttpStatus.BAD_REQUEST,
+      )
+    }
+
+    // 不允许重置自己的密码（应通过修改密码功能）
+    if (userId === req.user.userId) {
+      throw new HttpException(
+        { status: 'error', message: '不能通过此接口修改自己的密码，请使用修改密码功能' },
+        HttpStatus.BAD_REQUEST,
+      )
+    }
+
+    const success = await this.authService.resetPassword(userId, body.newPassword)
+    if (!success) {
+      throw new HttpException(
+        { status: 'error', message: '用户不存在' },
+        HttpStatus.NOT_FOUND,
+      )
+    }
+
+    this.logger.log(`👑 Admin ${req.user.username} reset password for userId: ${userId}`)
+    return { status: 'success', message: '密码重置成功' }
   }
 
   /**
