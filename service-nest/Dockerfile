@@ -5,8 +5,8 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# 安装 pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# 安装 pnpm（锁定大版本，与 pnpm-lock.yaml v6.1 兼容）
+RUN corepack enable && corepack prepare pnpm@8 --activate
 
 # 先复制依赖清单，利用 Docker 缓存层
 COPY package.json pnpm-lock.yaml ./
@@ -28,8 +28,8 @@ FROM node:20-alpine AS production
 
 WORKDIR /app
 
-# 安装 pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# 安装 pnpm（与 builder 阶段版本一致）
+RUN corepack enable && corepack prepare pnpm@8 --activate
 
 # 只复制生产依赖清单
 COPY package.json pnpm-lock.yaml ./
