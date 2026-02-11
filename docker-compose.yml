@@ -29,6 +29,7 @@ services:
       dockerfile: Dockerfile
     container_name: ai-creator-api
     restart: unless-stopped
+    network_mode: host
     # 如使用容器 MongoDB 则取消下面的 depends_on 注释
     # depends_on:
     #   mongo:
@@ -36,25 +37,15 @@ services:
     environment:
       PORT: 3003
       NODE_ENV: production
-      # ======== MongoDB 连接配置（二选一）========
-      # 方式一：连接宿主机上自建的 MongoDB（默认）
-      MONGODB_URI: mongodb://host.docker.internal:27017/
-      # 方式二：连接容器内 MongoDB（需启用上面的 mongo 服务）
-      # MONGODB_URI: mongodb://mongo:27017/
+      # 宿主机网络模式，直接用 127.0.0.1 连接 MongoDB
+      MONGODB_URI: mongodb://127.0.0.1:27017/
       MONGODB_DATABASE: PPTTOVideo
       # 如 MongoDB 启用了认证：
-      # MONGODB_URI: mongodb://appuser:your_password@host.docker.internal:27017/PPTTOVideo?authSource=PPTTOVideo
+      # MONGODB_URI: mongodb://appuser:your_password@127.0.0.1:27017/PPTTOVideo?authSource=PPTTOVideo
       TZ: Asia/Shanghai
-    # 使宿主机网络中的 host.docker.internal 可用（Linux 必须）
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     volumes:
-      # config.json 无需挂载 —— 配置存储在 MongoDB 中，通过前端 /config 页面在线管理
       # 上传文件持久化 —— 映射到宿主机具体目录
-      # 可修改冒号左侧路径为你想要的服务器目录
       - /opt/ai-creator/uploads:/app/uploads
-    networks:
-      - ai-creator-net
 
   # ============ 前端 Web ============
   web:
@@ -63,19 +54,6 @@ services:
       dockerfile: Dockerfile
     container_name: ai-creator-web
     restart: unless-stopped
+    network_mode: host
     depends_on:
       - api
-    ports:
-      - "80:80"         # HTTP
-      # - "443:443"     # HTTPS（需配置 SSL 证书）
-    networks:
-      - ai-creator-net
-
-volumes: {}
-  # 如使用容器 MongoDB 则取消以下注释
-  # mongo_data:
-  #   driver: local
-
-networks:
-  ai-creator-net:
-    driver: bridge

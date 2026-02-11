@@ -17,33 +17,23 @@ services:
     image: ghcr.io/huguanjin/ai-creator-api:latest
     container_name: ai-creator-api
     restart: unless-stopped
+    network_mode: host
     environment:
       PORT: 3003
       NODE_ENV: production
-      # MongoDB 连接（连接宿主机上的 MongoDB）
-      MONGODB_URI: mongodb://host.docker.internal:27017/
+      # 宿主机网络模式，直接用 127.0.0.1 连接 MongoDB
+      MONGODB_URI: mongodb://127.0.0.1:27017/
       MONGODB_DATABASE: PPTTOVideo
       TZ: Asia/Shanghai
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     volumes:
       # 上传文件持久化
       - /opt/ai-creator/uploads:/app/uploads
-    networks:
-      - ai-creator-net
 
   # ============ 前端 Web ============
   web:
     image: ghcr.io/huguanjin/ai-creator-web:latest
     container_name: ai-creator-web
     restart: unless-stopped
+    network_mode: host
     depends_on:
       - api
-    ports:
-      - "80:80"
-      # - "443:443"     # HTTPS（需配置 SSL 证书）
-    networks:
-      - ai-creator-net
-
-networks:
-  ai-creator-net:

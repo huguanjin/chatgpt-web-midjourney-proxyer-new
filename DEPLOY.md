@@ -586,7 +586,41 @@ sudo yum install git -y
 
 ## 二、安装 MongoDB
 
-### 2.1 Ubuntu 安装 MongoDB 7.0
+> **注意**：不建议通过宝塔面板安装 MongoDB，兼容性问题较多。请按以下步骤手动安装。
+
+### 2.1 Ubuntu 安装 MongoDB
+
+#### Ubuntu 24.04（noble）— 安装 MongoDB 8.0
+
+```bash
+# 安装依赖
+sudo apt install -y gnupg curl
+
+# 导入 MongoDB GPG 公钥
+curl -fsSL https://www.mongodb.org/static/pgp/server-8.0.asc | \
+  sudo gpg -o /usr/share/keyrings/mongodb-server-8.0.gpg --dearmor
+
+# 添加 MongoDB 源（Ubuntu 24.04 noble）
+echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/8.0 multiverse" | \
+  sudo tee /etc/apt/sources.list.d/mongodb-org-8.0.list
+
+# 安装
+sudo apt update
+sudo apt install -y mongodb-org
+
+# 启动并设置开机自启
+sudo systemctl start mongod
+sudo systemctl enable mongod
+
+# 验证安装
+mongod --version
+sudo systemctl status mongod
+
+# 测试连接
+mongosh --eval "db.runCommand({ ping: 1 })"
+```
+
+#### Ubuntu 22.04（jammy）— 安装 MongoDB 7.0
 
 ```bash
 # 导入 MongoDB GPG 公钥
@@ -607,6 +641,46 @@ sudo systemctl enable mongod
 
 # 验证状态
 sudo systemctl status mongod
+```
+
+#### 查看 Ubuntu 版本
+
+```bash
+# 不确定自己的 Ubuntu 版本？运行以下命令
+lsb_release -sc
+# 输出 noble → 用 24.04 的步骤
+# 输出 jammy → 用 22.04 的步骤
+```
+
+#### 常见安装问题
+
+**问题：`apt update` 报 GPG 错误**
+```bash
+# 删除旧密钥重新导入
+sudo rm /usr/share/keyrings/mongodb-server-*.gpg
+# 重新执行上面的密钥导入命令
+```
+
+**问题：`mongod` 启动失败**
+```bash
+# 查看详细错误
+sudo journalctl -u mongod --no-pager -n 50
+
+# 检查数据目录权限
+sudo chown -R mongodb:mongodb /var/lib/mongodb
+sudo chown mongodb:mongodb /tmp/mongodb-27017.sock
+
+# 重试
+sudo systemctl start mongod
+```
+
+**问题：Ubuntu 24 上宝塔面板安装 MongoDB 失败**
+> 宝塔面板的 MongoDB 安装脚本对 Ubuntu 24 兼容性较差，建议使用上面的官方源手动安装。如果宝塔已安装了残留文件，先清理再重装：
+```bash
+sudo apt purge -y mongodb-org* mongo-tools
+sudo rm -rf /var/lib/mongodb /var/log/mongodb
+sudo rm /etc/apt/sources.list.d/mongodb*.list
+# 然后按照上面的步骤重新安装
 ```
 
 ### 2.2 CentOS 安装 MongoDB 7.0
