@@ -14,8 +14,7 @@
 services:
   # ============ 后端 API ============
   api:
-    # ⬇️ 将 <OWNER> 替换为你的 GitHub 用户名（小写）
-    image: ghcr.io/<OWNER>/ai-creator-api:latest
+    image: ghcr.io/huguanjin/ai-creator-api:latest
     container_name: ai-creator-api
     restart: unless-stopped
     environment:
@@ -35,8 +34,7 @@ services:
 
   # ============ 前端 Web ============
   web:
-    # ⬇️ 将 <OWNER> 替换为你的 GitHub 用户名（小写）
-    image: ghcr.io/<OWNER>/ai-creator-web:latest
+    image: ghcr.io/huguanjin/ai-creator-web:latest
     container_name: ai-creator-web
     restart: unless-stopped
     depends_on:

@@ -1,9 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import axios from 'axios'
-
-// 后端 API 地址
-const BACKEND_API = 'http://localhost:3003'
+import { soraApi, veoApi, grokApi } from '@/api'
 
 // 任务 ID 和类型
 const taskId = ref('')
@@ -60,21 +57,15 @@ const queryTask = async () => {
   result.value = null
 
   try {
-    // 根据任务类型选择不同的 API 端点
-    const endpointMap: Record<string, string> = {
-      sora: '/v1/video/query',
-      veo: '/v1/veo/query',
-      grok: '/v1/grok/query',
+    // 根据任务类型调用对应的 API（自动带上 JWT Token）
+    const queryMap: Record<string, (id: string) => Promise<any>> = {
+      sora: (id) => soraApi.queryVideo(id),
+      veo: (id) => veoApi.queryVideo(id),
+      grok: (id) => grokApi.queryVideo(id),
     }
-    const endpoint = endpointMap[taskType.value] || '/v1/video/query'
+    const queryFn = queryMap[taskType.value] || queryMap.sora
     
-    const response = await axios.get(
-      `${BACKEND_API}${endpoint}`,
-      { 
-        params: { id: taskId.value.trim() },
-        timeout: 30000 
-      }
-    )
+    const response = await queryFn(taskId.value.trim())
 
     result.value = response.data
   } catch (err: any) {

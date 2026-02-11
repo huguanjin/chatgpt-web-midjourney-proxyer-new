@@ -345,8 +345,9 @@ const formatTime = (timestamp: number) => {
 // 获取图片 src - 支持 URL（文件存储）和 Base64（旧兼容）
 const getImageSrc = (image: { mimeType: string; url?: string; data?: string }) => {
   if (image.url) {
-    // 文件存储模式：返回后端 URL
-    return `http://localhost:3003${image.url}`
+    // 文件存储模式：使用与 API 相同的 base URL（开发模式走代理，生产模式走 Nginx）
+    const base = import.meta.env.VITE_API_BASE || ''
+    return `${base}${image.url}`
   }
   // 旧 Base64 模式兼容
   return `data:${image.mimeType};base64,${image.data}`
