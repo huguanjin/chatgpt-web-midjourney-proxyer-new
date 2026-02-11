@@ -1,7 +1,9 @@
 import axios from 'axios'
 
 // NestJS 后端地址
-const API_BASE = 'http://localhost:3003'
+// 开发模式: VITE_API_BASE=http://localhost:3003
+// 生产/Docker 模式: 留空，由 Nginx 反向代理 /v1/ 到后端
+const API_BASE = import.meta.env.VITE_API_BASE || ''
 
 const api = axios.create({
   baseURL: API_BASE,
