@@ -35,6 +35,7 @@ export interface AppConfig {
     smtpToken: string
     smtpFrom: string
   }
+  tutorialUrl: string
 }
 
 @Injectable()
@@ -70,6 +71,7 @@ export class ConfigService implements OnApplicationBootstrap {
           grok: { ...defaults.grok, ...stored.grok },
           grokImage: { ...defaults.grokImage, ...stored.grokImage },
           email: { ...defaults.email, ...stored.email },
+          tutorialUrl: stored.tutorialUrl ?? defaults.tutorialUrl,
         }
         this.logger.log('✅ Config loaded from MongoDB')
       } else {
@@ -140,6 +142,7 @@ export class ConfigService implements OnApplicationBootstrap {
         smtpToken: process.env.SMTP_TOKEN || 'AFPZvg9NRmqC5jZb',
         smtpFrom: process.env.SMTP_FROM || '18508593098@163.com',
       },
+      tutorialUrl: process.env.TUTORIAL_URL || '',
     }
   }
 
@@ -168,6 +171,7 @@ export class ConfigService implements OnApplicationBootstrap {
           grok: { ...defaults.grok, ...stored.grok },
           grokImage: { ...defaults.grokImage, ...stored.grokImage },
           email: { ...defaults.email, ...stored.email },
+          tutorialUrl: stored.tutorialUrl ?? defaults.tutorialUrl,
         }
       }
     } catch (error) {
@@ -213,6 +217,7 @@ export class ConfigService implements OnApplicationBootstrap {
         smtpToken: this.maskKey(config.email?.smtpToken ?? ''),
         smtpFrom: config.email?.smtpFrom ?? '',
       },
+      tutorialUrl: config.tutorialUrl ?? '',
     }
   }
 
@@ -244,8 +249,8 @@ export class ConfigService implements OnApplicationBootstrap {
    * 更新单个服务配置
    */
   async updateServiceConfig(
-    service: 'sora' | 'veo' | 'geminiImage' | 'grok' | 'grokImage' | 'email',
-    config: { server?: string; key?: string; characterServer?: string; characterKey?: string; smtpServer?: string; smtpPort?: number; smtpSSL?: boolean; smtpAccount?: string; smtpToken?: string; smtpFrom?: string },
+    service: 'sora' | 'veo' | 'geminiImage' | 'grok' | 'grokImage' | 'email' | 'tutorial',
+    config: { server?: string; key?: string; characterServer?: string; characterKey?: string; smtpServer?: string; smtpPort?: number; smtpSSL?: boolean; smtpAccount?: string; smtpToken?: string; smtpFrom?: string; url?: string },
   ): Promise<AppConfig> {
     const currentConfig = this.getConfig()
     
@@ -281,6 +286,8 @@ export class ConfigService implements OnApplicationBootstrap {
       if (config.smtpAccount !== undefined) currentConfig.email.smtpAccount = config.smtpAccount
       if (config.smtpToken !== undefined) currentConfig.email.smtpToken = config.smtpToken
       if (config.smtpFrom !== undefined) currentConfig.email.smtpFrom = config.smtpFrom
+    } else if (service === 'tutorial') {
+      if (config.url !== undefined) currentConfig.tutorialUrl = config.url
     }
 
     this.config = currentConfig

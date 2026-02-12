@@ -11,6 +11,7 @@
           <router-link to="/query" class="nav-link">任务查询</router-link>
           <router-link to="/feedback" class="nav-link">📮 问题反馈</router-link>
           <router-link to="/config" class="nav-link">⚙️ 配置</router-link>
+          <a v-if="tutorialUrl" :href="tutorialUrl" target="_blank" rel="noopener noreferrer" class="nav-link tutorial-link">📖 使用教程</a>
           <router-link v-if="authStore.isAdmin" to="/admin" class="nav-link admin-link">👥 用户管理</router-link>
           <router-link v-if="authStore.isAdmin" to="/admin/feedback" class="nav-link admin-link">📝 反馈管理</router-link>
         </nav>
@@ -87,6 +88,7 @@
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { configApi } from '@/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -94,6 +96,16 @@ const authStore = useAuthStore()
 
 const showHeader = computed(() => route.name !== 'login')
 const avatarChar = computed(() => (authStore.username || '?').charAt(0).toUpperCase())
+
+// 使用教程链接
+const tutorialUrl = ref('')
+
+const loadTutorialUrl = async () => {
+  try {
+    const res = await configApi.getConfig()
+    tutorialUrl.value = res.data.data.tutorialUrl || ''
+  } catch {}
+}
 
 // 面板状态
 const showUserPanel = ref(false)
@@ -157,7 +169,10 @@ const handleLogout = () => {
 
 // 点击页面其他区域关闭面板
 const closePanel = () => { showUserPanel.value = false; resetPwdForm() }
-onMounted(() => document.addEventListener('click', closePanel))
+onMounted(() => {
+  document.addEventListener('click', closePanel)
+  loadTutorialUrl()
+})
 onUnmounted(() => document.removeEventListener('click', closePanel))
 </script>
 

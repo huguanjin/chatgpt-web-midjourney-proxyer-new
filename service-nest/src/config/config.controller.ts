@@ -63,16 +63,16 @@ export class ConfigController {
   ) {
     this.logger.log(`📝 Update ${service} config request`)
     
-    if (!['sora', 'veo', 'geminiImage', 'grok', 'grokImage', 'email'].includes(service)) {
+    if (!['sora', 'veo', 'geminiImage', 'grok', 'grokImage', 'email', 'tutorial'].includes(service)) {
       return {
         status: 'error',
-        message: `Invalid service: ${service}. Valid services are: sora, veo, geminiImage, grok, grokImage, email`,
+        message: `Invalid service: ${service}. Valid services are: sora, veo, geminiImage, grok, grokImage, email, tutorial`,
       }
     }
 
     try {
       await this.configService.updateServiceConfig(
-        service as 'sora' | 'veo' | 'geminiImage' | 'grok' | 'grokImage' | 'email',
+        service as 'sora' | 'veo' | 'geminiImage' | 'grok' | 'grokImage' | 'email' | 'tutorial',
         dto,
       )
       return {

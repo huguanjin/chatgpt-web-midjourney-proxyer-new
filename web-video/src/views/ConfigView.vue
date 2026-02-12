@@ -234,9 +234,46 @@ const cancelEmailEdit = () => {
   emailEditMode.value = false
 }
 
+// ============ 使用教程链接配置（仅管理员） ============
+const tutorialEditMode = ref(false)
+const tutorialUrl = ref('')
+const tutorialEditUrl = ref('')
+
+const loadTutorialConfig = async () => {
+  if (!authStore.isAdmin) return
+  try {
+    const res = await configApi.getConfig()
+    tutorialUrl.value = res.data.data.tutorialUrl || ''
+  } catch {}
+}
+
+const enterTutorialEdit = () => {
+  tutorialEditUrl.value = tutorialUrl.value
+  tutorialEditMode.value = true
+}
+
+const saveTutorialConfig = async () => {
+  isSaving.value = true
+  try {
+    await configApi.updateServiceConfig('tutorial', { url: tutorialEditUrl.value.trim() })
+    await loadTutorialConfig()
+    tutorialEditMode.value = false
+    showMessage('使用教程链接已更新！', 'success')
+  } catch (e: any) {
+    showMessage(e.response?.data?.message || e.message || '保存失败', 'error')
+  } finally {
+    isSaving.value = false
+  }
+}
+
+const cancelTutorialEdit = () => {
+  tutorialEditMode.value = false
+}
+
 onMounted(() => {
   loadConfig()
   loadEmailConfig()
+  loadTutorialConfig()
 })
 </script>
 
@@ -522,6 +559,44 @@ onMounted(() => {
               {{ isSaving ? '保存中...' : '💾 保存' }}
             </button>
             <button class="cancel-btn" @click="cancelEdit('grokImage')">取消</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 使用教程链接配置（仅管理员可见） -->
+      <div v-if="authStore.isAdmin" class="config-section tutorial-section">
+        <div class="section-header">
+          <h2>📖 使用教程链接</h2>
+          <button
+            v-if="!tutorialEditMode"
+            class="edit-btn"
+            @click="enterTutorialEdit"
+          >
+            ✏️ 编辑
+          </button>
+        </div>
+
+        <div v-if="!tutorialEditMode" class="config-display">
+          <div class="config-item">
+            <label>教程链接</label>
+            <span v-if="tutorialUrl" class="value">
+              <a :href="tutorialUrl" target="_blank" rel="noopener noreferrer" style="color: #667eea; text-decoration: underline;">{{ tutorialUrl }}</a>
+            </span>
+            <span v-else class="value" style="color: #999;">(未设置，设置后导航栏将显示「使用教程」菜单)</span>
+          </div>
+        </div>
+
+        <div v-else class="config-edit">
+          <div class="form-group">
+            <label>教程链接 URL</label>
+            <input v-model="tutorialEditUrl" type="text" placeholder="https://example.com/tutorial" />
+          </div>
+          <p style="color: #999; font-size: 12px; margin-bottom: 12px;">提示：设置后导航栏将显示「📖 使用教程」菜单，用户点击即可跳转。清空链接则隐藏菜单。</p>
+          <div class="button-group">
+            <button class="save-btn" :disabled="isSaving" @click="saveTutorialConfig">
+              {{ isSaving ? '保存中...' : '💾 保存' }}
+            </button>
+            <button class="cancel-btn" @click="cancelTutorialEdit">取消</button>
           </div>
         </div>
       </div>
@@ -882,6 +957,10 @@ h1 {
 
 .email-section {
   border-left: 4px solid #667eea;
+}
+
+.tutorial-section {
+  border-left: 4px solid #22c55e;
 }
 
 .ssl-toggle {

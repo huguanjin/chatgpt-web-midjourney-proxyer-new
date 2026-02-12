@@ -313,6 +313,7 @@ export interface AppConfig {
   grok: ServiceConfig
   grokImage: ServiceConfig
   email: EmailConfig
+  tutorialUrl: string
 }
 
 export const configApi = {
