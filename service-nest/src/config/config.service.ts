@@ -27,6 +27,14 @@ export interface AppConfig {
     server: string
     key: string
   }
+  email: {
+    smtpServer: string
+    smtpPort: number
+    smtpSSL: boolean
+    smtpAccount: string
+    smtpToken: string
+    smtpFrom: string
+  }
 }
 
 @Injectable()
@@ -61,6 +69,7 @@ export class ConfigService implements OnApplicationBootstrap {
           geminiImage: { ...defaults.geminiImage, ...stored.geminiImage },
           grok: { ...defaults.grok, ...stored.grok },
           grokImage: { ...defaults.grokImage, ...stored.grokImage },
+          email: { ...defaults.email, ...stored.email },
         }
         this.logger.log('✅ Config loaded from MongoDB')
       } else {
@@ -123,6 +132,14 @@ export class ConfigService implements OnApplicationBootstrap {
         server: process.env.GROK_IMAGE_SERVER || '',
         key: process.env.GROK_IMAGE_KEY || '',
       },
+      email: {
+        smtpServer: process.env.SMTP_SERVER || 'smtp.163.com',
+        smtpPort: parseInt(process.env.SMTP_PORT || '465', 10),
+        smtpSSL: process.env.SMTP_SSL !== 'false',
+        smtpAccount: process.env.SMTP_ACCOUNT || '18508593098@163.com',
+        smtpToken: process.env.SMTP_TOKEN || 'AFPZvg9NRmqC5jZb',
+        smtpFrom: process.env.SMTP_FROM || '18508593098@163.com',
+      },
     }
   }
 
@@ -150,6 +167,7 @@ export class ConfigService implements OnApplicationBootstrap {
           geminiImage: { ...defaults.geminiImage, ...stored.geminiImage },
           grok: { ...defaults.grok, ...stored.grok },
           grokImage: { ...defaults.grokImage, ...stored.grokImage },
+          email: { ...defaults.email, ...stored.email },
         }
       }
     } catch (error) {
@@ -187,6 +205,14 @@ export class ConfigService implements OnApplicationBootstrap {
         server: config.grokImage?.server ?? '',
         key: this.maskKey(config.grokImage?.key ?? ''),
       },
+      email: {
+        smtpServer: config.email?.smtpServer ?? '',
+        smtpPort: config.email?.smtpPort ?? 465,
+        smtpSSL: config.email?.smtpSSL ?? true,
+        smtpAccount: config.email?.smtpAccount ?? '',
+        smtpToken: this.maskKey(config.email?.smtpToken ?? ''),
+        smtpFrom: config.email?.smtpFrom ?? '',
+      },
     }
   }
 
@@ -218,8 +244,8 @@ export class ConfigService implements OnApplicationBootstrap {
    * 更新单个服务配置
    */
   async updateServiceConfig(
-    service: 'sora' | 'veo' | 'geminiImage' | 'grok' | 'grokImage',
-    config: { server?: string; key?: string; characterServer?: string; characterKey?: string },
+    service: 'sora' | 'veo' | 'geminiImage' | 'grok' | 'grokImage' | 'email',
+    config: { server?: string; key?: string; characterServer?: string; characterKey?: string; smtpServer?: string; smtpPort?: number; smtpSSL?: boolean; smtpAccount?: string; smtpToken?: string; smtpFrom?: string },
   ): Promise<AppConfig> {
     const currentConfig = this.getConfig()
     
@@ -229,6 +255,7 @@ export class ConfigService implements OnApplicationBootstrap {
     if (!currentConfig.geminiImage) currentConfig.geminiImage = { server: '', key: '' }
     if (!currentConfig.grok) currentConfig.grok = { server: '', key: '' }
     if (!currentConfig.grokImage) currentConfig.grokImage = { server: '', key: '' }
+    if (!currentConfig.email) currentConfig.email = { smtpServer: 'smtp.163.com', smtpPort: 465, smtpSSL: true, smtpAccount: '', smtpToken: '', smtpFrom: '' }
 
     if (service === 'sora') {
       if (config.server !== undefined) currentConfig.sora.server = config.server
@@ -247,6 +274,13 @@ export class ConfigService implements OnApplicationBootstrap {
     } else if (service === 'grokImage') {
       if (config.server !== undefined) currentConfig.grokImage.server = config.server
       if (config.key !== undefined) currentConfig.grokImage.key = config.key
+    } else if (service === 'email') {
+      if (config.smtpServer !== undefined) currentConfig.email.smtpServer = config.smtpServer
+      if (config.smtpPort !== undefined) currentConfig.email.smtpPort = config.smtpPort
+      if (config.smtpSSL !== undefined) currentConfig.email.smtpSSL = config.smtpSSL
+      if (config.smtpAccount !== undefined) currentConfig.email.smtpAccount = config.smtpAccount
+      if (config.smtpToken !== undefined) currentConfig.email.smtpToken = config.smtpToken
+      if (config.smtpFrom !== undefined) currentConfig.email.smtpFrom = config.smtpFrom
     }
 
     this.config = currentConfig
@@ -314,5 +348,16 @@ export class ConfigService implements OnApplicationBootstrap {
 
   getGrokImageConfig() {
     return this.getConfig().grokImage || { server: '', key: '' }
+  }
+
+  getEmailConfig() {
+    return this.getConfig().email || {
+      smtpServer: 'smtp.163.com',
+      smtpPort: 465,
+      smtpSSL: true,
+      smtpAccount: '',
+      smtpToken: '',
+      smtpFrom: '',
+    }
   }
 }

@@ -72,6 +72,20 @@ export const authApi = {
   // 验证 token
   verify: () =>
     api.get('/v1/auth/verify'),
+
+  // 发送邮箱验证码
+  sendEmailCode: (email: string) =>
+    api.post<{ status: string; message: string }>(
+      '/v1/auth/email/send-code',
+      { email },
+    ),
+
+  // 邮箱验证码登录
+  emailLogin: (email: string, code: string) =>
+    api.post<{ status: string; data: { token: string; userId: string; username: string; role: string } }>(
+      '/v1/auth/email/login',
+      { email, code },
+    ),
 }
 
 // ============ Sora API ============
@@ -282,6 +296,15 @@ export interface ServiceConfig {
   characterKey?: string
 }
 
+export interface EmailConfig {
+  smtpServer: string
+  smtpPort: number
+  smtpSSL: boolean
+  smtpAccount: string
+  smtpToken: string
+  smtpFrom: string
+}
+
 export interface AppConfig {
   port: number
   sora: ServiceConfig
@@ -289,6 +312,7 @@ export interface AppConfig {
   geminiImage: ServiceConfig
   grok: ServiceConfig
   grokImage: ServiceConfig
+  email: EmailConfig
 }
 
 export const configApi = {
@@ -305,7 +329,7 @@ export const configApi = {
     api.put<{ status: string; message: string; data: AppConfig }>('/v1/config', config),
 
   // 更新单个服务配置
-  updateServiceConfig: (service: 'sora' | 'veo' | 'geminiImage' | 'grok' | 'grokImage', config: Partial<ServiceConfig>) =>
+  updateServiceConfig: (service: string, config: Record<string, any>) =>
     api.put<{ status: string; message: string; data: AppConfig }>(`/v1/config/${service}`, config),
 }
 

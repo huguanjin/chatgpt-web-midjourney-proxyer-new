@@ -12,9 +12,10 @@ import {
 } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { AuthService } from './auth.service'
-import { LoginDto, RegisterDto, ChangePasswordDto } from './dto'
+import { LoginDto, RegisterDto, ChangePasswordDto, SendEmailCodeDto, EmailLoginDto } from './dto'
 import { JwtAuthGuard } from './jwt-auth.guard'
 import { JWT_SECRET } from './jwt.strategy'
+import { EmailService } from '../email/email.service'
 
 @Controller('v1/auth')
 export class AuthController {
@@ -23,6 +24,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly jwtService: JwtService,
+    private readonly emailService: EmailService,
   ) {}
 
   /**
@@ -178,6 +180,77 @@ export class AuthController {
         userId: req.user.userId,
         username: req.user.username,
         role: req.user.role,
+      },
+    }
+  }
+
+  // ============ 邮箱验证码登录 ============
+
+  /**
+   * 发送邮箱验证码
+   * POST /v1/auth/email/send-code
+   */
+  @Post('email/send-code')
+  async sendEmailCode(@Body() dto: SendEmailCodeDto) {
+    this.logger.log(`📧 Send code request: ${dto.email}`)
+
+    try {
+      await this.emailService.sendVerificationCode(dto.email)
+      return {
+        status: 'success',
+        message: '验证码已发送，请查收邮件',
+      }
+    } catch (err: any) {
+      this.logger.warn(`❌ Send code failed: ${dto.email} - ${err.message}`)
+      throw new HttpException(
+        { status: 'error', message: err.message },
+        HttpStatus.BAD_REQUEST,
+      )
+    }
+  }
+
+  /**
+   * 邮箱验证码登录
+   * POST /v1/auth/email/login
+   * 验证码正确后自动登录（用户不存在则自动注册）
+   */
+  @Post('email/login')
+  async emailLogin(@Body() dto: EmailLoginDto) {
+    this.logger.log(`📧 Email login attempt: ${dto.email}`)
+
+    // 验证验证码
+    const valid = this.emailService.verifyCode(dto.email, dto.code)
+    if (!valid) {
+      this.logger.warn(`❌ Email login failed: invalid code for ${dto.email}`)
+      throw new HttpException(
+        { status: 'error', message: '验证码错误或已过期' },
+        HttpStatus.UNAUTHORIZED,
+      )
+    }
+
+    // 查找或创建用户
+    const user = await this.authService.findOrCreateByEmail(dto.email)
+
+    // 生成 JWT token
+    const payload = {
+      sub: (user as any)._id.toString(),
+      username: user.username,
+      role: user.role,
+    }
+    const token = this.jwtService.sign(payload, {
+      secret: JWT_SECRET,
+      expiresIn: '7d',
+    })
+
+    this.logger.log(`✅ Email login success: ${user.username} (${dto.email})`)
+
+    return {
+      status: 'success',
+      data: {
+        token,
+        userId: (user as any)._id.toString(),
+        username: user.username,
+        role: user.role,
       },
     }
   }

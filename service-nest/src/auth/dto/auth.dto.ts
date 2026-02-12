@@ -1,4 +1,4 @@
-import { IsString, MinLength, MaxLength, Matches } from 'class-validator'
+import { IsString, MinLength, MaxLength, IsEmail, Length } from 'class-validator'
 
 export class LoginDto {
   @IsString()
@@ -27,4 +27,20 @@ export class ChangePasswordDto {
   @IsString()
   @MinLength(6)
   newPassword: string
+}
+
+/** 发送邮箱验证码 */
+export class SendEmailCodeDto {
+  @IsEmail({}, { message: '请输入有效的邮箱地址' })
+  email: string
+}
+
+/** 邮箱验证码登录 */
+export class EmailLoginDto {
+  @IsEmail({}, { message: '请输入有效的邮箱地址' })
+  email: string
+
+  @IsString()
+  @Length(6, 6, { message: '验证码为6位数字' })
+  code: string
 }

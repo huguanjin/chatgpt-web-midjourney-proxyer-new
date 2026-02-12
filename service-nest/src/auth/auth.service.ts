@@ -8,6 +8,7 @@ import { UserConfigService } from '../user-config/user-config.service'
 
 export interface UserDocument {
   username: string
+  email?: string
   password: string  // 格式: salt:hash
   role: 'admin' | 'user'
   created_at: Date
@@ -26,6 +27,7 @@ export class AuthService implements OnApplicationBootstrap {
 
   async onApplicationBootstrap() {
     await this.ensureUserIndexes()
+    await this.ensureEmailIndex()
     await this.initDefaultAdmin()
     await this.ensureAllUsersHaveConfig()
   }
@@ -288,5 +290,72 @@ export class AuthService implements OnApplicationBootstrap {
     this.logger.log(`📋 Default API config initialized for userId: ${userId}`)
 
     return { ...newUser, _id: result.insertedId }
+  }
+
+  /**
+   * 通过邮箱查找或创建用户（邮箱验证码登录专用）
+   * 如果邮箱已绑定用户则返回该用户，否则自动注册新用户
+   */
+  async findOrCreateByEmail(email: string): Promise<any> {
+    const collection = this.databaseService.getDb().collection('users')
+
+    // 先查找是否有绑定此邮箱的用户
+    let user = await collection.findOne({ email })
+    if (user) {
+      // 更新最后登录时间
+      await collection.updateOne(
+        { _id: (user as any)._id },
+        { $set: { last_login: new Date() } },
+      )
+      return user
+    }
+
+    // 邮箱用户不存在，自动创建新用户
+    // 用邮箱前缀作为用户名，若冲突则追加随机后缀
+    const emailPrefix = email.split('@')[0]
+    let username = emailPrefix
+    const existingUser = await collection.findOne({ username })
+    if (existingUser) {
+      username = `${emailPrefix}_${randomBytes(3).toString('hex')}`
+    }
+
+    // 生成随机密码（邮箱用户可后续设置）
+    const rawPassword = randomBytes(8).toString('hex')
+    const hashedPassword = this.hashPassword(rawPassword)
+
+    const newUser: UserDocument = {
+      username,
+      email,
+      password: hashedPassword,
+      role: 'user',
+      created_at: new Date(),
+      last_login: new Date(),
+    }
+
+    const result = await collection.insertOne(newUser as any)
+    const userId = result.insertedId.toString()
+    this.logger.log(`✅ Email user auto-registered: ${username} (${email})`)
+
+    // 初始化用户配置
+    await this.userConfigService.initUserConfig(userId)
+    this.logger.log(`📋 Default API config initialized for email user: ${userId}`)
+
+    return { ...newUser, _id: result.insertedId }
+  }
+
+  /**
+   * 为已有用户绑定邮箱（创建索引）
+   */
+  async ensureEmailIndex() {
+    try {
+      const collection = this.databaseService.getDb().collection('users')
+      await collection.createIndex(
+        { email: 1 },
+        { unique: true, sparse: true }, // sparse: 允许 email 为 null
+      )
+      this.logger.log('📇 Email index ensured on users collection')
+    } catch (error) {
+      this.logger.warn(`⚠️ Email index creation warning: ${error.message}`)
+    }
   }
 }

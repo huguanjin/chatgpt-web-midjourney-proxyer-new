@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
@@ -15,6 +15,91 @@ const successMsg = ref('')
 const showPassword = ref(false)
 const showConfirmPassword = ref(false)
 const isRegisterMode = ref(false)
+
+// 邮箱登录相关
+const loginMethod = ref<'account' | 'email'>('account') // 登录方式
+const email = ref('')
+const emailCode = ref('')
+const isSendingCode = ref(false)
+const countdown = ref(0)
+let countdownTimer: ReturnType<typeof setInterval> | null = null
+
+const canSendCode = computed(() => {
+  return email.value.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim()) && countdown.value === 0 && !isSendingCode.value
+})
+
+const switchLoginMethod = (method: 'account' | 'email') => {
+  loginMethod.value = method
+  errorMsg.value = ''
+  successMsg.value = ''
+}
+
+const startCountdown = () => {
+  countdown.value = 60
+  countdownTimer = setInterval(() => {
+    countdown.value--
+    if (countdown.value <= 0) {
+      if (countdownTimer) clearInterval(countdownTimer)
+      countdownTimer = null
+    }
+  }, 1000)
+}
+
+const handleSendCode = async () => {
+  const trimmedEmail = email.value.trim()
+  if (!trimmedEmail) {
+    errorMsg.value = '请输入邮箱地址'
+    return
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+    errorMsg.value = '请输入有效的邮箱地址'
+    return
+  }
+
+  isSendingCode.value = true
+  errorMsg.value = ''
+
+  try {
+    await authStore.sendEmailCode(trimmedEmail)
+    successMsg.value = '验证码已发送，请查收邮件'
+    startCountdown()
+  } catch (err: any) {
+    errorMsg.value = err.response?.data?.message || err.message || '验证码发送失败'
+  } finally {
+    isSendingCode.value = false
+  }
+}
+
+const handleEmailLogin = async () => {
+  const trimmedEmail = email.value.trim()
+  if (!trimmedEmail) {
+    errorMsg.value = '请输入邮箱地址'
+    return
+  }
+  if (!emailCode.value.trim()) {
+    errorMsg.value = '请输入验证码'
+    return
+  }
+  if (emailCode.value.trim().length !== 6) {
+    errorMsg.value = '验证码为6位数字'
+    return
+  }
+
+  isLoading.value = true
+  errorMsg.value = ''
+
+  try {
+    await authStore.emailLogin(trimmedEmail, emailCode.value.trim())
+    successMsg.value = '登录成功，正在跳转...'
+    setTimeout(() => {
+      router.push('/')
+    }, 800)
+  } catch (err: any) {
+    errorMsg.value = err.response?.data?.message || err.message || '登录失败，验证码错误或已过期'
+  } finally {
+    isLoading.value = false
+  }
+}
 
 const switchMode = () => {
   isRegisterMode.value = !isRegisterMode.value
@@ -86,7 +171,9 @@ const handleRegister = async () => {
 }
 
 const handleSubmit = () => {
-  if (isRegisterMode.value) {
+  if (loginMethod.value === 'email') {
+    handleEmailLogin()
+  } else if (isRegisterMode.value) {
     handleRegister()
   } else {
     handleLogin()
@@ -106,80 +193,133 @@ const handleSubmit = () => {
 
       <!-- 登录/注册表单 -->
       <div class="login-card">
-        <!-- 模式切换 Tab -->
+        <!-- 登录方式切换 Tab -->
         <div class="mode-tabs">
           <button
             class="mode-tab"
-            :class="{ active: !isRegisterMode }"
-            @click="isRegisterMode = false; errorMsg = ''; successMsg = ''"
-          >登录</button>
+            :class="{ active: loginMethod === 'account' && !isRegisterMode }"
+            @click="switchLoginMethod('account'); isRegisterMode = false"
+          >账号登录</button>
           <button
             class="mode-tab"
-            :class="{ active: isRegisterMode }"
-            @click="isRegisterMode = true; errorMsg = ''; successMsg = ''"
+            :class="{ active: loginMethod === 'email' }"
+            @click="switchLoginMethod('email'); isRegisterMode = false"
+          >邮箱登录</button>
+          <button
+            class="mode-tab"
+            :class="{ active: loginMethod === 'account' && isRegisterMode }"
+            @click="switchLoginMethod('account'); isRegisterMode = true; errorMsg = ''; successMsg = ''"
           >注册</button>
         </div>
 
         <form @submit.prevent="handleSubmit" class="login-form">
-          <div class="login-field">
-            <label class="login-label">用户名</label>
-            <div class="login-input-wrapper">
-              <span class="login-input-icon">👤</span>
-              <input
-                v-model="username"
-                type="text"
-                class="login-input"
-                :placeholder="isRegisterMode ? '1-20个字符' : '请输入用户名'"
-                autocomplete="username"
-                @keyup.enter="handleSubmit"
-              />
-            </div>
-          </div>
 
-          <div class="login-field">
-            <label class="login-label">密码</label>
-            <div class="login-input-wrapper">
-              <span class="login-input-icon">🔒</span>
-              <input
-                v-model="password"
-                :type="showPassword ? 'text' : 'password'"
-                class="login-input"
-                :placeholder="isRegisterMode ? '至少6个字符' : '请输入密码'"
-                :autocomplete="isRegisterMode ? 'new-password' : 'current-password'"
-                @keyup.enter="handleSubmit"
-              />
-              <button
-                type="button"
-                class="login-toggle-pwd"
-                @click="showPassword = !showPassword"
-              >
-                {{ showPassword ? '🙈' : '👁️' }}
-              </button>
+          <!-- ===== 邮箱验证码登录 ===== -->
+          <template v-if="loginMethod === 'email'">
+            <div class="login-field">
+              <label class="login-label">邮箱地址</label>
+              <div class="login-input-wrapper">
+                <span class="login-input-icon">📧</span>
+                <input
+                  v-model="email"
+                  type="email"
+                  class="login-input"
+                  placeholder="请输入邮箱地址"
+                  autocomplete="email"
+                  @keyup.enter="handleSubmit"
+                />
+              </div>
             </div>
-          </div>
 
-          <!-- 确认密码（仅注册模式） -->
-          <div v-if="isRegisterMode" class="login-field">
-            <label class="login-label">确认密码</label>
-            <div class="login-input-wrapper">
-              <span class="login-input-icon">🔒</span>
-              <input
-                v-model="confirmPassword"
-                :type="showConfirmPassword ? 'text' : 'password'"
-                class="login-input"
-                placeholder="请再次输入密码"
-                autocomplete="new-password"
-                @keyup.enter="handleSubmit"
-              />
-              <button
-                type="button"
-                class="login-toggle-pwd"
-                @click="showConfirmPassword = !showConfirmPassword"
-              >
-                {{ showConfirmPassword ? '🙈' : '👁️' }}
-              </button>
+            <div class="login-field">
+              <label class="login-label">验证码</label>
+              <div class="login-input-wrapper code-wrapper">
+                <span class="login-input-icon">🔢</span>
+                <input
+                  v-model="emailCode"
+                  type="text"
+                  class="login-input code-input"
+                  placeholder="6位数字验证码"
+                  maxlength="6"
+                  autocomplete="one-time-code"
+                  @keyup.enter="handleSubmit"
+                />
+                <button
+                  type="button"
+                  class="send-code-btn"
+                  :disabled="!canSendCode || isSendingCode"
+                  @click="handleSendCode"
+                >
+                  <template v-if="isSendingCode">发送中...</template>
+                  <template v-else-if="countdown > 0">{{ countdown }}s</template>
+                  <template v-else>获取验证码</template>
+                </button>
+              </div>
             </div>
-          </div>
+          </template>
+
+          <!-- ===== 账号密码登录/注册 ===== -->
+          <template v-else>
+            <div class="login-field">
+              <label class="login-label">用户名</label>
+              <div class="login-input-wrapper">
+                <span class="login-input-icon">👤</span>
+                <input
+                  v-model="username"
+                  type="text"
+                  class="login-input"
+                  :placeholder="isRegisterMode ? '1-20个字符' : '请输入用户名'"
+                  autocomplete="username"
+                  @keyup.enter="handleSubmit"
+                />
+              </div>
+            </div>
+
+            <div class="login-field">
+              <label class="login-label">密码</label>
+              <div class="login-input-wrapper">
+                <span class="login-input-icon">🔒</span>
+                <input
+                  v-model="password"
+                  :type="showPassword ? 'text' : 'password'"
+                  class="login-input"
+                  :placeholder="isRegisterMode ? '至少6个字符' : '请输入密码'"
+                  :autocomplete="isRegisterMode ? 'new-password' : 'current-password'"
+                  @keyup.enter="handleSubmit"
+                />
+                <button
+                  type="button"
+                  class="login-toggle-pwd"
+                  @click="showPassword = !showPassword"
+                >
+                  {{ showPassword ? '🙈' : '👁️' }}
+                </button>
+              </div>
+            </div>
+
+            <!-- 确认密码（仅注册模式） -->
+            <div v-if="isRegisterMode" class="login-field">
+              <label class="login-label">确认密码</label>
+              <div class="login-input-wrapper">
+                <span class="login-input-icon">🔒</span>
+                <input
+                  v-model="confirmPassword"
+                  :type="showConfirmPassword ? 'text' : 'password'"
+                  class="login-input"
+                  placeholder="请再次输入密码"
+                  autocomplete="new-password"
+                  @keyup.enter="handleSubmit"
+                />
+                <button
+                  type="button"
+                  class="login-toggle-pwd"
+                  @click="showConfirmPassword = !showConfirmPassword"
+                >
+                  {{ showConfirmPassword ? '🙈' : '👁️' }}
+                </button>
+              </div>
+            </div>
+          </template>
 
           <!-- 错误提示 -->
           <div v-if="errorMsg" class="login-error">
@@ -197,7 +337,10 @@ const handleSubmit = () => {
             :disabled="isLoading"
           >
             <span v-if="isLoading" class="loading"></span>
-            <template v-if="isRegisterMode">
+            <template v-if="loginMethod === 'email'">
+              {{ isLoading ? '登录中...' : '邮箱登录' }}
+            </template>
+            <template v-else-if="isRegisterMode">
               {{ isLoading ? '注册中...' : '注 册' }}
             </template>
             <template v-else>
@@ -205,13 +348,16 @@ const handleSubmit = () => {
             </template>
           </button>
 
-          <p class="mode-switch-hint">
+          <p v-if="loginMethod === 'account'" class="mode-switch-hint">
             <template v-if="isRegisterMode">
               已有账号？<a href="#" @click.prevent="switchMode">去登录</a>
             </template>
             <template v-else>
               没有账号？<a href="#" @click.prevent="switchMode">去注册</a>
             </template>
+          </p>
+          <p v-else class="mode-switch-hint">
+            验证码将发送到您的邮箱，新邮箱自动注册
           </p>
         </form>
       </div>
@@ -444,6 +590,43 @@ const handleSubmit = () => {
 .mode-switch-hint a:hover {
   color: #a5b4fc;
   text-decoration: underline;
+}
+
+/* 验证码输入行 */
+.code-wrapper {
+  display: flex;
+  gap: 10px;
+}
+
+.code-input {
+  flex: 1;
+}
+
+.send-code-btn {
+  flex-shrink: 0;
+  padding: 0 16px;
+  min-width: 110px;
+  height: 48px;
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.send-code-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #4f46e5, #4338ca);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.send-code-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: rgba(99, 102, 241, 0.4);
 }
 
 .login-footer {

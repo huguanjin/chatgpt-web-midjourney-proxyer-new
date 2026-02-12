@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { userConfigApi, type UserApiConfig, type ServiceConfig } from '@/api'
+import { userConfigApi, configApi, type UserApiConfig, type ServiceConfig, type EmailConfig } from '@/api'
+import { useAuthStore } from '@/stores/auth'
+
+const authStore = useAuthStore()
 
 const isLoading = ref(false)
 const isSaving = ref(false)
@@ -178,8 +181,62 @@ const syncDefault = async () => {
   }
 }
 
+// ============ 邮箱 SMTP 配置（仅管理员） ============
+const emailEditMode = ref(false)
+const emailConfig = ref<EmailConfig | null>(null)
+const emailEditForm = ref<EmailConfig>({
+  smtpServer: '',
+  smtpPort: 465,
+  smtpSSL: true,
+  smtpAccount: '',
+  smtpToken: '',
+  smtpFrom: '',
+})
+
+const loadEmailConfig = async () => {
+  if (!authStore.isAdmin) return
+  try {
+    const res = await configApi.getConfig()
+    emailConfig.value = res.data.data.email || null
+  } catch (e: any) {
+    // 静默失败
+  }
+}
+
+const enterEmailEdit = async () => {
+  try {
+    const res = await configApi.getFullConfig()
+    const email = res.data.data.email
+    if (email) {
+      emailEditForm.value = { ...email }
+    }
+    emailEditMode.value = true
+  } catch (e: any) {
+    showMessage(e.message || '获取邮箱配置失败', 'error')
+  }
+}
+
+const saveEmailConfig = async () => {
+  isSaving.value = true
+  try {
+    await configApi.updateServiceConfig('email', emailEditForm.value)
+    await loadEmailConfig()
+    emailEditMode.value = false
+    showMessage('邮箱 SMTP 配置已更新，立即生效！', 'success')
+  } catch (e: any) {
+    showMessage(e.response?.data?.message || e.message || '保存失败', 'error')
+  } finally {
+    isSaving.value = false
+  }
+}
+
+const cancelEmailEdit = () => {
+  emailEditMode.value = false
+}
+
 onMounted(() => {
   loadConfig()
+  loadEmailConfig()
 })
 </script>
 
@@ -469,6 +526,88 @@ onMounted(() => {
         </div>
       </div>
 
+      <!-- 邮箱 SMTP 配置（仅管理员可见） -->
+      <div v-if="authStore.isAdmin" class="config-section email-section">
+        <div class="section-header">
+          <h2>📧 邮箱 SMTP 配置</h2>
+          <button
+            v-if="!emailEditMode"
+            class="edit-btn"
+            @click="enterEmailEdit"
+          >
+            ✏️ 编辑
+          </button>
+        </div>
+
+        <div v-if="!emailEditMode && emailConfig" class="config-display">
+          <div class="config-item">
+            <label>SMTP 服务器</label>
+            <span class="value">{{ emailConfig.smtpServer || '(未设置)' }}</span>
+          </div>
+          <div class="config-item">
+            <label>端口</label>
+            <span class="value">{{ emailConfig.smtpPort }}</span>
+          </div>
+          <div class="config-item">
+            <label>SSL</label>
+            <span class="value">{{ emailConfig.smtpSSL ? '✅ 已启用' : '❌ 未启用' }}</span>
+          </div>
+          <div class="config-item">
+            <label>账号</label>
+            <span class="value">{{ emailConfig.smtpAccount || '(未设置)' }}</span>
+          </div>
+          <div class="config-item">
+            <label>授权码</label>
+            <span class="value masked">{{ emailConfig.smtpToken || '(未设置)' }}</span>
+          </div>
+          <div class="config-item">
+            <label>发件人</label>
+            <span class="value">{{ emailConfig.smtpFrom || '(未设置)' }}</span>
+          </div>
+        </div>
+
+        <div v-else-if="emailEditMode" class="config-edit">
+          <div class="form-group">
+            <label>SMTP 服务器</label>
+            <input v-model="emailEditForm.smtpServer" type="text" placeholder="smtp.163.com" />
+          </div>
+          <div class="form-group">
+            <label>端口</label>
+            <input v-model.number="emailEditForm.smtpPort" type="number" placeholder="465" />
+          </div>
+          <div class="form-group">
+            <label>SSL</label>
+            <div class="ssl-toggle">
+              <label class="checkbox-label">
+                <input v-model="emailEditForm.smtpSSL" type="checkbox" /> 启用 SSL 加密
+              </label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>SMTP 账号</label>
+            <input v-model="emailEditForm.smtpAccount" type="text" placeholder="user@163.com" />
+          </div>
+          <div class="form-group">
+            <label>SMTP 授权码</label>
+            <input v-model="emailEditForm.smtpToken" type="text" placeholder="邮箱授权码（非登录密码）" />
+          </div>
+          <div class="form-group">
+            <label>发件人地址</label>
+            <input v-model="emailEditForm.smtpFrom" type="text" placeholder="user@163.com" />
+          </div>
+          <div class="button-group">
+            <button class="save-btn" :disabled="isSaving" @click="saveEmailConfig">
+              {{ isSaving ? '保存中...' : '💾 保存' }}
+            </button>
+            <button class="cancel-btn" @click="cancelEmailEdit">取消</button>
+          </div>
+        </div>
+
+        <div v-else class="config-display">
+          <p style="color: #999;">加载中...</p>
+        </div>
+      </div>
+
       <!-- 说明 -->
       <div class="info-section">
         <h3>📝 说明</h3>
@@ -477,6 +616,7 @@ onMounted(() => {
           <li>API Key 以脱敏方式显示，编辑时可查看完整内容</li>
           <li>新用户的配置自动从模板初始化，配置存储在 MongoDB 中</li>
           <li><strong>快捷同步：</strong>如果 API 服务商共用地址和密钥，可使用顶部「快捷配置同步」一键填充，同步后仍可单独修改</li>
+          <li v-if="authStore.isAdmin"><strong>邮箱配置（管理员）：</strong>用于邮箱验证码登录功能，修改后立即生效无需重启</li>
         </ul>
       </div>
     </div>
@@ -738,6 +878,14 @@ h1 {
   background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%) !important;
   color: #1a1a2e !important;
   font-weight: 600 !important;
+}
+
+.email-section {
+  border-left: 4px solid #667eea;
+}
+
+.ssl-toggle {
+  padding: 4px 0;
 }
 
 @media (max-width: 600px) {

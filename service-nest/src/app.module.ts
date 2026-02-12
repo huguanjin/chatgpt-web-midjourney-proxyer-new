@@ -12,6 +12,7 @@ import { VideoTasksModule } from './video-tasks/video-tasks.module'
 import { FileStorageModule } from './file-storage/file-storage.module'
 import { AdminModule } from './admin/admin.module'
 import { FeedbackModule } from './feedback/feedback.module'
+import { EmailModule } from './email/email.module'
 
 @Module({
   imports: [
@@ -22,6 +23,8 @@ import { FeedbackModule } from './feedback/feedback.module'
     }),
     // MongoDB 数据库模块（全局）
     DatabaseModule,
+    // 邮件服务模块（全局）
+    EmailModule,
     // 用户认证模块
     AuthModule,
     // 用户级 API 配置模块（全局）

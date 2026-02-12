@@ -84,6 +84,31 @@ export const useAuthStore = defineStore('auth', () => {
     await authApi.changePassword(oldPassword, newPassword)
   }
 
+  /**
+   * 发送邮箱验证码
+   */
+  const sendEmailCode = async (email: string) => {
+    await authApi.sendEmailCode(email)
+  }
+
+  /**
+   * 邮箱验证码登录
+   */
+  const emailLogin = async (email: string, code: string) => {
+    const response = await authApi.emailLogin(email, code)
+    const data = response.data.data
+
+    token.value = data.token
+    userId.value = data.userId
+    username.value = data.username
+    role.value = data.role
+
+    localStorage.setItem('auth_token', data.token)
+    localStorage.setItem('auth_userId', data.userId)
+    localStorage.setItem('auth_username', data.username)
+    localStorage.setItem('auth_role', data.role)
+  }
+
   return {
     token,
     userId,
@@ -96,5 +121,7 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     verifyToken,
     changePassword,
+    sendEmailCode,
+    emailLogin,
   }
 })
